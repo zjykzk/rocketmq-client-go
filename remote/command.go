@@ -105,16 +105,6 @@ func (cmd *Command) String() string {
 		cmd.Code, cmd.Language, cmd.Opaque, cmd.Flag, cmd.Remark, cmd.ExtFields, cmd.Body)
 }
 
-// Encode encode command function
-func Encode(cmd interface{}) ([]byte, error) {
-	return encode(cmd.(*Command))
-}
-
-// Decode decode command function
-func Decode(buf []byte) (interface{}, error) {
-	return decode(buf)
-}
-
 func encode(cmd *Command) ([]byte, error) {
 	var (
 		remarkBytes       []byte

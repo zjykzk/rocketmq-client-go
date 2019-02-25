@@ -1,13 +1,13 @@
-package flag
+package consumer
 
+// pull flags
 const (
 	PullCommitOffset = 1 << iota
 	PullSuspend
 	PullSubscribe
 )
 
-// BuildPull build the pull system flag
-func BuildPull(commitOffset, suspend, subscribe bool) (flag int32) {
+func buildPull(commitOffset, suspend, subscribe bool) (flag int32) {
 	if commitOffset {
 		flag |= PullCommitOffset
 	}

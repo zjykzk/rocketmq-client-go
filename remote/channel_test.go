@@ -1,4 +1,4 @@
-package net
+package remote
 
 import (
 	"fmt"
@@ -14,12 +14,12 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/log"
 )
 
-func echoDecode(data []byte) (interface{}, error) {
-	return string(data), nil
+func echoDecode(data []byte) (*Command, error) {
+	return &Command{Body: data}, nil
 }
 
-func echoEncode(o interface{}) ([]byte, error) {
-	return o.([]byte), nil
+func echoEncode(o *Command) ([]byte, error) {
+	return o.Body, nil
 }
 
 func echoReadPacket(r io.Reader) ([]byte, error) {
@@ -122,7 +122,7 @@ func TestChannel(t *testing.T) {
 
 	assert.Equal(t, StateConnected, ch.getState())
 
-	err = ch.SendSync([]byte(fmt.Sprintf(`POST s HTTP/1.1 Host: localhost`)))
+	err = ch.SendSync(&Command{Body: []byte(fmt.Sprintf(`POST s HTTP/1.1 Host: localhost`))})
 	assert.Nil(t, err)
 
 	resp := make([]byte, 1024)

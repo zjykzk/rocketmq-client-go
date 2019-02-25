@@ -38,18 +38,19 @@ func TestDelayedWorkQueue(t *testing.T) {
 	task, _ = q.take()
 	assert.Equal(t, 2, task.task.(*mockRunnable).id)
 
-	waitChan := make(chan struct{})
+	waitTake, waitOffer := make(chan struct{}), make(chan struct{})
 	// insert first
 	go func() {
-		close(waitChan)
+		<-waitOffer
+		close(waitTake)
 		task, _ = q.take()
 		assert.Equal(t, 4, task.task.(*mockRunnable).id)
 	}()
 
-	<-waitChan
-	time.Sleep(time.Millisecond)
 	q.offer(&mockRunnable{id: 4}, time.Millisecond*5)
 	fmt.Printf("offert %+v\n", q.queue)
+	close(waitOffer)
+	<-waitTake
 
 	task, _ = q.take()
 	assert.Equal(t, 1, task.task.(*mockRunnable).id)

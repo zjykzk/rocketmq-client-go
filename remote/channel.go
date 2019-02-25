@@ -1,4 +1,4 @@
-package net
+package remote
 
 import (
 	"bufio"
@@ -181,13 +181,13 @@ func (c *channel) ioloop() {
 }
 
 // SendSync send data sync
-func (c *channel) SendSync(data interface{}) error {
+func (c *channel) SendSync(cmd *Command) error {
 	if c.WriteTimeout > 0 {
 		c.ctx.Conn.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
 	} else {
 		c.ctx.Conn.SetWriteDeadline(time.Time{})
 	}
-	bs, err := c.Encode(data)
+	bs, err := c.Encode(cmd)
 	if err != nil {
 		return err
 	}

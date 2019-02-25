@@ -11,7 +11,6 @@ import (
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/remote"
-	"github.com/zjykzk/rocketmq-client-go/remote/net"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -109,7 +108,7 @@ func newMQClient(config *Config, clientID string, logger log.Logger) MQClient {
 	if c.PollNameServerInterval <= 0 {
 		c.PollNameServerInterval = 1000 * 30
 	}
-	c.Client = remote.NewClient(&net.Config{
+	c.Client = remote.NewClient(&remote.Config{
 		ReadTimeout:  config.HeartbeatBrokerInterval * 2,
 		WriteTimeout: time.Millisecond * 100,
 		DialTimeout:  time.Second,
@@ -570,7 +569,7 @@ OUT:
 	return r
 }
 
-func (c *mqClient) processRequest(ctx *net.ChannelContext, cmd *remote.Command) bool {
+func (c *mqClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
 	switch cmd.Code {
 	case remote.NotifyConsumerIdsChanged:
 		for _, co := range c.consumers.coll() {

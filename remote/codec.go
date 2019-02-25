@@ -1,4 +1,4 @@
-package net
+package remote
 
 import (
 	"errors"
@@ -13,12 +13,12 @@ var ErrNeedContent = errors.New("need content")
 
 // Encoder encode the object to the bytes
 type Encoder interface {
-	Encode(interface{}) ([]byte, error)
+	Encode(*Command) ([]byte, error)
 }
 
 // Decoder decode the bytes to the object
 type Decoder interface {
-	Decode([]byte) (interface{}, error)
+	Decode([]byte) (*Command, error)
 }
 
 // PacketReader reads the packet
@@ -27,18 +27,18 @@ type PacketReader interface {
 }
 
 // EncoderFunc encoder function
-type EncoderFunc func(interface{}) ([]byte, error)
+type EncoderFunc func(*Command) ([]byte, error)
 
 // Encode call encoder function
-func (f EncoderFunc) Encode(o interface{}) ([]byte, error) {
-	return f(o)
+func (f EncoderFunc) Encode(cmd *Command) ([]byte, error) {
+	return f(cmd)
 }
 
 // DecoderFunc decoder function
-type DecoderFunc func([]byte) (interface{}, error)
+type DecoderFunc func([]byte) (*Command, error)
 
 // Decode call decoder function
-func (f DecoderFunc) Decode(d []byte) (interface{}, error) {
+func (f DecoderFunc) Decode(d []byte) (*Command, error) {
 	return f(d)
 }
 

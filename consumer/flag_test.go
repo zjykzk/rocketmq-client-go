@@ -1,4 +1,4 @@
-package flag
+package consumer
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestPull(t *testing.T) {
-	f := BuildPull(true, true, true)
+	f := buildPull(true, true, true)
 	assert.Equal(t, int32(1), f&PullCommitOffset)
 	f = ClearCommitOffset(f)
 	assert.Equal(t, int32(0), f&PullCommitOffset)

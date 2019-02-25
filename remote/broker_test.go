@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/zjykzk/rocketmq-client-go/log"
-	"github.com/zjykzk/rocketmq-client-go/remote/net"
 )
 
 func TestBroker(t *testing.T) {
@@ -14,7 +13,7 @@ func TestBroker(t *testing.T) {
 }
 
 func testCreateTopic(t *testing.T) {
-	rpc := NewRPC(NewClient(&net.Config{}, nil, &log.MockLogger{}))
+	rpc := NewRPC(NewClient(&Config{}, nil, &log.MockLogger{}))
 	err := rpc.CreateOrUpdateTopic("localhost:10909", &CreateOrUpdateTopicHeader{
 		Topic:           "test_create_topic",
 		DefaultTopic:    "default_topic",
@@ -29,7 +28,7 @@ func testCreateTopic(t *testing.T) {
 }
 
 func testDeleteTopic(t *testing.T) {
-	rpc := NewRPC(NewClient(&net.Config{}, nil, &log.MockLogger{}))
+	rpc := NewRPC(NewClient(&Config{}, nil, &log.MockLogger{}))
 	err := rpc.DeleteTopicInBroker("localhost:10909", "test_create_topic", time.Millisecond*100)
 	t.Log(err)
 }

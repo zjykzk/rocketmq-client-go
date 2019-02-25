@@ -8,7 +8,6 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
-	"github.com/zjykzk/rocketmq-client-go/flag"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
@@ -145,7 +144,7 @@ func (c *PullConsumer) pullSync(
 			QueueID:              q.QueueID,
 			QueueOffset:          offset,
 			MaxCount:             int32(maxCount),
-			SysFlag:              flag.BuildPull(false, block, true),
+			SysFlag:              buildPull(false, block, true),
 			CommitOffset:         0,
 			SuspendTimeoutMillis: int64(c.BrokerSuspendMaxTime / time.Millisecond),
 			Subscription:         expr,

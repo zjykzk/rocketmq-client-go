@@ -1,4 +1,4 @@
-package net
+package remote
 
 import (
 	"fmt"
@@ -9,13 +9,13 @@ import (
 var (
 	// DONOT CALL ME OUT OF THE FILE!
 	futurePool = sync.Pool{
-		New: func() interface{} { return &responseFuture{response: make(chan Response, 1)} },
+		New: func() interface{} { return &responseFuture{response: make(chan *Command, 1)} },
 	}
 )
 
 // responseFuture waitable response
 type responseFuture struct {
-	response  chan Response
+	response  chan *Command
 	err       error
 	startTime time.Time
 	timeout   time.Duration
@@ -24,11 +24,11 @@ type responseFuture struct {
 }
 
 // get return the reponse command
-func (f *responseFuture) get() (Response, error) {
+func (f *responseFuture) get() (*Command, error) {
 	return <-f.response, f.err
 }
 
-func (f *responseFuture) put(resp Response) {
+func (f *responseFuture) put(resp *Command) {
 	f.response <- resp
 }
 
