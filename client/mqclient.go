@@ -117,9 +117,7 @@ func newMQClient(config *Config, clientID string, logger log.Logger) MQClient {
 }
 
 // NewMQClient create the client
-func NewMQClient(config *Config, clientID string, logger log.Logger) (
-	MQClient, error,
-) {
+func NewMQClient(config *Config, clientID string, logger log.Logger) (MQClient, error) {
 	if clientID == "" {
 		return nil, errEmptyClientID
 	}

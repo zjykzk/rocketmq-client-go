@@ -16,16 +16,6 @@ type Client interface {
 	Shutdown()
 }
 
-// ErrorResponseCreater creates some errors
-type ErrorResponseCreater interface {
-	// creates connection error response.
-	ConnError(id int64, err error) Response
-	// creates timeout error response.
-	TimeoutError(id int64) Response
-	// creates connection closed error response.
-	ConnClosed(id int64) Response
-}
-
 type client struct {
 	requestProcessor func(*ChannelContext, *Command) bool
 

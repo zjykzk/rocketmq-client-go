@@ -46,7 +46,9 @@ func (h *SendHeader) ToMap() map[string]string {
 
 // SendResponse send response
 type SendResponse struct {
-	Response
+	Code          Code
+	Message       string
+	Version       int16
 	MsgID         string
 	QueueOffset   int64
 	QueueID       int32
@@ -64,7 +66,7 @@ func (r *RPC) SendMessageSync(addr string, d []byte, header *SendHeader, to time
 		return nil, err
 	}
 
-	resp := &SendResponse{Response: Response{Code: cmd.Code, Message: cmd.Remark}}
+	resp := &SendResponse{Code: cmd.Code, Message: cmd.Remark}
 	switch cmd.Code {
 	case FlushDiskTimeout, FlushSlaveTimeout, SlaveNotAvailable:
 	case Success:
@@ -133,7 +135,9 @@ func (p *PullHeader) ToMap() map[string]string {
 
 // PullResponse pull message response
 type PullResponse struct {
-	Response
+	Code            Code
+	Message         string
+	Version         int16
 	NextBeginOffset int64
 	MinOffset       int64
 	MaxOffset       int64
@@ -156,7 +160,7 @@ func (r *RPC) PullMessageSync(addr string, header *PullHeader, to time.Duration)
 		return nil, brokerError(cmd)
 	}
 
-	pr = &PullResponse{Response: Response{Code: cmd.Code, Message: cmd.Remark, Version: cmd.Version}}
+	pr = &PullResponse{Code: cmd.Code, Message: cmd.Remark, Version: cmd.Version}
 
 	if cmd.ExtFields == nil {
 		return

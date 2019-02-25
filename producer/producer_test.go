@@ -124,7 +124,6 @@ func (r *mockRPC) SendMessageSync(
 	*remote.SendResponse, error,
 ) {
 	resp := &remote.SendResponse{
-		Response:      remote.Response{},
 		MsgID:         "msgID",
 		QueueOffset:   111,
 		QueueID:       222,
