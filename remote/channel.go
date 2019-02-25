@@ -3,7 +3,6 @@ package remote
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"sync/atomic"
@@ -43,11 +42,16 @@ type Handler interface {
 	OnMessage(ctx *ChannelContext, m interface{})
 }
 
-// Config contains channel's configuration
-type Config struct {
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	DialTimeout  time.Duration
+// ChannelConfig contains channel's configuration
+type ChannelConfig struct {
+	ClientConfig
+
+	Encoder
+	PacketReader
+	Decoder
+	Handler
+
+	logger log.Logger
 }
 
 // ChannelContext channel's context
@@ -75,35 +79,35 @@ func (r runnable) Run() {
 }
 
 type channel struct {
-	*Config
-	Encoder
-	Decoder
-	Handler
-	PacketReader
+	ChannelConfig
+
+	executor *executor.GoroutinePoolExecutor
+	state    int32
+	ctx      ChannelContext
 
 	exitChan chan struct{}
-	executor *executor.GoroutinePoolExecutor
-
-	ctx ChannelContext
-
-	state int32
-
-	logger log.Logger
 }
 
-func newChannel(addr string,
-	encoder Encoder,
-	packetReader PacketReader,
-	decoder Decoder,
-	handler Handler,
-	config *Config,
-	logger log.Logger,
-) (*channel, error) {
-	if encoder == nil || decoder == nil || handler == nil {
-		return nil, fmt.Errorf("bad params")
+func newChannel(addr string, conf ChannelConfig) (*channel, error) {
+	if conf.Decoder == nil {
+		return nil, errors.New("new channel error:empty decoder")
+	}
+	if conf.Encoder == nil {
+		return nil, errors.New("new channel error:empty encoder")
+	}
+	if conf.Handler == nil {
+		return nil, errors.New("new channel error:empty handler")
 	}
 
-	conn, err := net.DialTimeout("tcp4", addr, config.DialTimeout)
+	if conf.logger == nil {
+		return nil, errors.New("new channel error:empty logger")
+	}
+
+	if conf.DialTimeout <= 0 {
+		conf.DialTimeout = time.Second * 3
+	}
+
+	conn, err := net.DialTimeout("tcp4", addr, conf.DialTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -116,11 +120,7 @@ func newChannel(addr string,
 	}
 
 	ch := &channel{
-		Config:       config,
-		Encoder:      encoder,
-		Decoder:      decoder,
-		Handler:      handler,
-		PacketReader: packetReader,
+		ChannelConfig: conf,
 
 		exitChan: make(chan struct{}),
 
@@ -128,8 +128,6 @@ func newChannel(addr string,
 		state: StateConnected,
 
 		executor: executor,
-
-		logger: logger,
 	}
 	ch.OnActive(&ch.ctx)
 	go ch.ioloop()

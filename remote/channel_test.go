@@ -112,10 +112,19 @@ func TestChannel(t *testing.T) {
 	time.Sleep(time.Second)
 
 	ch, err := newChannel("localhost:"+port,
-		EncoderFunc(echoEncode), PacketReaderFunc(echoReadPacket), DecoderFunc(echoDecode),
-		&fakeHandler{logger: &log.MockLogger{}},
-		&Config{ReadTimeout: time.Second, WriteTimeout: time.Second, DialTimeout: time.Second},
-		&log.MockLogger{})
+		ChannelConfig{
+			ClientConfig: ClientConfig{
+				ReadTimeout:  time.Second,
+				WriteTimeout: time.Second,
+				DialTimeout:  time.Second,
+			},
+			Encoder:      EncoderFunc(echoEncode),
+			PacketReader: PacketReaderFunc(echoReadPacket),
+			Decoder:      DecoderFunc(echoDecode),
+			Handler:      &fakeHandler{logger: &log.MockLogger{}},
+			logger:       &log.MockLogger{},
+		})
+
 	if err != nil {
 		t.Fatal(err)
 	}

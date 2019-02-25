@@ -39,7 +39,7 @@ type client struct {
 	encoder      Encoder
 	packetReader PacketReader
 
-	conf Config
+	conf ClientConfig
 
 	exitChan chan struct{}
 	wg       sync.WaitGroup
@@ -50,13 +50,20 @@ type client struct {
 // ErrBadNamesrvAddrs bad name server address
 var ErrBadNamesrvAddrs = errors.New("bad name server address")
 
+// ClientConfig timeout configuration
+type ClientConfig struct {
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	DialTimeout  time.Duration
+}
+
 // NewClient create the client
 func NewClient(
-	conf *Config, rp func(*ChannelContext, *Command) bool, logger log.Logger,
+	conf ClientConfig, rp func(*ChannelContext, *Command) bool, logger log.Logger,
 ) Client {
 	c := &client{
 		requestProcessor: rp,
-		conf:             *conf,
+		conf:             conf,
 		encoder:          EncoderFunc(encode),
 		decoder:          DecoderFunc(decode),
 		packetReader:     PacketReaderFunc(ReadPacket),
@@ -258,7 +265,14 @@ func (c *client) getChannel(addr string) (ch *channel, err error) {
 		if !ok {
 			var err error
 			c.logger.Infof("new channel to %s\n", addr)
-			ch, err = newChannel(addr, c.encoder, c.packetReader, c.decoder, c, &c.conf, c.logger)
+			ch, err = newChannel(addr, ChannelConfig{
+				ClientConfig: c.conf,
+				Encoder:      c.encoder,
+				PacketReader: c.packetReader,
+				Decoder:      c.decoder,
+				Handler:      c,
+				logger:       c.logger,
+			})
 			if err != nil {
 				c.chanLocker.Unlock()
 				return nil, err

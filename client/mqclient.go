@@ -108,7 +108,7 @@ func newMQClient(config *Config, clientID string, logger log.Logger) MQClient {
 	if c.PollNameServerInterval <= 0 {
 		c.PollNameServerInterval = 1000 * 30
 	}
-	c.Client = remote.NewClient(&remote.Config{
+	c.Client = remote.NewClient(remote.ClientConfig{
 		ReadTimeout:  config.HeartbeatBrokerInterval * 2,
 		WriteTimeout: time.Millisecond * 100,
 		DialTimeout:  time.Second,
