@@ -26,9 +26,9 @@ func TestUniqID(t *testing.T) {
 	d, err := hex.DecodeString(s)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(now.Unix()), binary.BigEndian.Uint32(d))
-	assert.Equal(t, 0, d[4])
-	assert.Equal(t, 0, d[5])
-	assert.Equal(t, 1, d[6])
+	assert.Equal(t, uint8(0), d[4])
+	assert.Equal(t, uint8(0), d[5])
+	assert.Equal(t, uint8(1), d[6])
 }
 
 func TestID(t *testing.T) {
@@ -42,7 +42,7 @@ func TestID(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, addr, &addr1)
-	assert.Equal(t, 20, commitOffset)
+	assert.Equal(t, int64(20), commitOffset)
 
 	assert.True(t, IsMessageID(id))
 	assert.False(t, IsMessageID("111"))

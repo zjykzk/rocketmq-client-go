@@ -12,8 +12,8 @@ import (
 func TestPutMessages(t *testing.T) {
 	pq := newProcessQueue()
 	pq.putMessages([]*message.MessageExt{{}, {QueueOffset: 1}, {QueueOffset: 1}})
-	assert.Equal(t, 0, pq.msgSize)
-	assert.Equal(t, 2, pq.msgCount)
+	assert.Equal(t, int64(0), pq.msgSize)
+	assert.Equal(t, int32(2), pq.msgCount)
 }
 
 func TestPullExpired(t *testing.T) {

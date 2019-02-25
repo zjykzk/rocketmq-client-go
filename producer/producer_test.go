@@ -9,14 +9,14 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
-	"qiniu.com/dora-cloud/boots/broker/utils"
 )
 
 func TestSendHeader(t *testing.T) {
-	p := NewProducer("sendHeader", []string{"abc"}, utils.CreateDefaultLogger())
+	p := NewProducer("sendHeader", []string{"abc"}, &log.MockLogger{})
 	p.CreateTopicKey, p.DefaultTopicQueueNums = "CreateTopicKey", 100
 	m := &message.Message{Topic: "sendHeader", Flag: 111, Properties: map[string]string{
 		message.PropertyReconsumeTime:     "100",
@@ -30,21 +30,21 @@ func TestSendHeader(t *testing.T) {
 	assert.Equal(t, header.DefaultTopic, p.CreateTopicKey)
 	assert.Equal(t, header.DefaultTopicQueueNums, p.DefaultTopicQueueNums)
 	assert.Equal(t, header.QueueID, q.QueueID)
-	assert.Equal(t, header.SysFlag, 123)
+	assert.Equal(t, header.SysFlag, int32(123))
 	assert.True(t, header.BornTimestamp > 0)
 	assert.Equal(t, header.Flag, m.Flag)
 	assert.True(t, header.Properties != "")
 	assert.Equal(t, header.UnitMode, p.IsUnitMode)
 	assert.Equal(t, header.Batch, false)
-	assert.Equal(t, header.ReconsumeTimes, 0)
-	assert.Equal(t, header.MaxReconsumeTimes, 0)
+	assert.Equal(t, header.ReconsumeTimes, int32(0))
+	assert.Equal(t, header.MaxReconsumeTimes, int32(0))
 	assert.Equal(t, "100", m.Properties[message.PropertyReconsumeTime])
 	assert.Equal(t, "120", m.Properties[message.PropertyMaxReconsumeTimes])
 
 	m.Topic = rocketmq.RetryGroupTopicPrefix + p.GroupName
 	header = p.buildSendHeader(m, q, 123)
-	assert.Equal(t, header.ReconsumeTimes, 100)
-	assert.Equal(t, header.MaxReconsumeTimes, 120)
+	assert.Equal(t, header.ReconsumeTimes, int32(100))
+	assert.Equal(t, header.MaxReconsumeTimes, int32(120))
 	assert.Equal(t, "", m.Properties[message.PropertyReconsumeTime])
 	assert.Equal(t, "", m.Properties[message.PropertyMaxReconsumeTimes])
 }
@@ -151,7 +151,7 @@ func (r *mockRPC) SendMessageSync(
 }
 
 func TestSendSync0(t *testing.T) {
-	p := NewProducer("sendHeader", []string{"abc"}, utils.CreateDefaultLogger())
+	p := NewProducer("sendHeader", []string{"abc"}, &log.MockLogger{})
 	p.client = &mockMQClient{brokerAddr: map[string]string{"ok": "ok"}}
 	p.rpc = &mockRPC{}
 
@@ -187,7 +187,7 @@ func TestSendSync0(t *testing.T) {
 }
 
 func TestSendSync(t *testing.T) {
-	p := NewProducer("sendSync", []string{"abc"}, utils.CreateDefaultLogger())
+	p := NewProducer("sendSync", []string{"abc"}, &log.MockLogger{})
 	p.Start()
 	mc := &mockMQClient{brokerAddr: map[string]string{"b1": "ok", "b2": "b2"}, mqClient: p.client, p: p}
 	p.client = mc
@@ -218,7 +218,7 @@ func TestSendSync(t *testing.T) {
 }
 
 func TestUpdateTopicRouter(t *testing.T) {
-	p := NewProducer("sendSync", []string{"abc"}, utils.CreateDefaultLogger())
+	p := NewProducer("sendSync", []string{"abc"}, &log.MockLogger{})
 	topic := "update topic router"
 	p.topicPublishInfos.table = make(map[string]*topicPublishInfo)
 	p.UpdateTopicPublish(topic, &route.TopicRouter{

@@ -273,7 +273,7 @@ func (bp *bproducer) run(args []string) {
 	}()
 
 	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
+		fmt.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
 	signalChan := make(chan os.Signal, 1)

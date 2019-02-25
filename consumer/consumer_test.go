@@ -5,8 +5,8 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/route"
-	"qiniu.com/dora-cloud/boots/broker/utils"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -56,7 +56,7 @@ func TestUpdateTopicSubscribe(t *testing.T) {
 func TestFindBrokerAddr(t *testing.T) {
 	c := &consumer{
 		topicRouters: route.NewTopicRouterTable(),
-		Logger:       utils.CreateDefaultLogger(),
+		Logger:       &log.MockLogger{},
 	}
 
 	topic := "test"
@@ -95,7 +95,7 @@ func TestSubscribe(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	c := &consumer{
-		Logger: utils.CreateDefaultLogger(),
+		Logger: &log.MockLogger{},
 		Config: defaultConfig,
 	}
 	c.StartFunc, c.ShutdownFunc = c.start, c.shutdown

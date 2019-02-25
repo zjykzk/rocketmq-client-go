@@ -75,7 +75,7 @@ func TestMessage(t *testing.T) {
 	assert.Equal(t, "abc", mext.Topic)
 	assert.Equal(t, "hello!q!", string(mext.Body))
 	assert.Equal(t, []byte{127, 0, 0, 1}, mext.BornHost.Host)
-	assert.Equal(t, 0, mext.BornHost.Port)
+	assert.Equal(t, uint16(0), mext.BornHost.Port)
 	assert.Equal(t, int64(123456), mext.CommitLogOffset)
 	assert.Equal(t, int64(0), mext.PreparedTransactionOffset)
 	assert.Equal(t, uint8(0), mext.QueueID)

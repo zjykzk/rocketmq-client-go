@@ -85,7 +85,7 @@ func (c *offsetUpdater) Run(args []string) {
 	)
 
 	if err != nil {
-		logger.Fatal(err)
+		logger.Error(err)
 	}
 }
 
@@ -136,7 +136,7 @@ func (c *offsetQuerier) Run(args []string) {
 	)
 
 	if err != nil {
-		logger.Fatal(err)
+		logger.Error(err)
 	}
 	fmt.Println(offset)
 }

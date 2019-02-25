@@ -90,7 +90,7 @@ func TestAvg(t *testing.T) {
 			assert.Equal(t, len(c.expectedQIDs), len(ret))
 
 			for i, id := range c.expectedQIDs {
-				assert.Equal(t, id, ret[i].QueueID)
+				assert.Equal(t, uint8(id), ret[i].QueueID)
 			}
 		}
 	}

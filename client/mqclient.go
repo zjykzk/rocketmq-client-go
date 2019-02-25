@@ -50,7 +50,6 @@ type mqClient struct {
 	state    rocketmq.State
 
 	remote.Client
-	rpc rpc
 
 	clientID string
 
@@ -115,7 +114,6 @@ func newMQClient(config *Config, clientID string, logger log.Logger) MQClient {
 		WriteTimeout: time.Millisecond * 100,
 		DialTimeout:  time.Second,
 	}, c.processRequest, logger)
-	c.rpc = remote.NewRPC(c.Client)
 	return c
 }
 
@@ -186,7 +184,7 @@ func (c *mqClient) unregisterClient(producerGroup, consumerGroup string) {
 	c.Lock()
 	for _, name := range c.brokerAddrs.brokerNames() {
 		for _, addr := range c.brokerAddrs.brokerAddrs(name) {
-			err := c.rpc.UnregisterClient(addr.addr, clientID, producerGroup, consumerGroup, timeout)
+			err := unregisterClient(c.Client, addr.addr, clientID, producerGroup, consumerGroup, timeout)
 			c.logger.Infof(
 				"unregister client p:%s c:%s from addr %s, err:%v",
 				producerGroup, consumerGroup, addr.addr, err,
@@ -346,7 +344,7 @@ func (c *mqClient) getTopicRouteInfo(topic string) (router *route.TopicRouter, e
 	l := len(c.NameServerAddrs)
 	for i, cc := rand.Intn(l), l; cc > 0; i, cc = i+1, cc-1 {
 		addr := c.NameServerAddrs[i%l]
-		router, err = c.rpc.GetTopicRouteInfo(addr, topic, 3*time.Second)
+		router, err = getTopicRouteInfo(c.Client, addr, topic, 3*time.Second)
 		if err == nil {
 			return
 		}

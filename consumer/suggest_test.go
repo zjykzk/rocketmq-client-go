@@ -13,10 +13,10 @@ func TestSuggester(t *testing.T) {
 		table: make(map[string]int32),
 	}
 
-	assert.Equal(t, 0, bs.put(&message.Queue{}, 1))
+	assert.Equal(t, int32(0), bs.put(&message.Queue{}, 1))
 	id, exist := bs.get(&message.Queue{})
 	assert.True(t, exist)
-	assert.Equal(t, 1, id)
+	assert.Equal(t, int32(1), id)
 
 	_, exist = bs.get(&message.Queue{Topic: "t"})
 	assert.False(t, exist)

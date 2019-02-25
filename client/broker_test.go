@@ -30,7 +30,7 @@ func TestVersion(t *testing.T) {
 	vt := brokerVersionTable{table: make(map[string]map[string]int32)}
 
 	vt.put("testv", "test addr", 1)
-	assert.Equal(t, 1, vt.get("testv", "test addr"))
-	assert.Equal(t, 0, vt.get("not exist", "test addr"))
-	assert.Equal(t, 0, vt.get("testv", "not exist"))
+	assert.Equal(t, int32(1), vt.get("testv", "test addr"))
+	assert.Equal(t, int32(0), vt.get("not exist", "test addr"))
+	assert.Equal(t, int32(0), vt.get("testv", "not exist"))
 }

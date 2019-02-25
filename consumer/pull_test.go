@@ -5,18 +5,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qiniu/log.v1"
-
 	"github.com/stretchr/testify/assert"
 
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
 )
 
 func TestPullConsumer(t *testing.T) {
-	logger := log.Std
-	logger.Level = log.Ldebug
+	logger := &log.MockLogger{}
 	namesrvAddrs := []string{"10.200.20.54:9988", "10.200.20.25:9988"}
 	c := NewPullConsumer("test-senddlt", namesrvAddrs, logger)
 	c.Start()

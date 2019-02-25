@@ -24,10 +24,10 @@ func TestDelayedWorkQueue(t *testing.T) {
 	heap.Push(q, &scheduledTask{time: timeout, sequenceNumber: 1})
 
 	task := heap.Pop(q).(*scheduledTask)
-	assert.Equal(t, 1, task.sequenceNumber)
+	assert.Equal(t, int64(1), task.sequenceNumber)
 
 	task = heap.Pop(q).(*scheduledTask)
-	assert.Equal(t, 2, task.sequenceNumber)
+	assert.Equal(t, int64(2), task.sequenceNumber)
 
 	assert.Equal(t, 0, q.Len())
 

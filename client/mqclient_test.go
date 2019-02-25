@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zjykzk/rocketmq-client-go/log"
+	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
-	"qiniu.com/dora-cloud/boots/broker/utils"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -25,7 +26,7 @@ func TestMQClient(t *testing.T) {
 	_, err = NewMQClient(&Config{}, "clientid", nil)
 	assert.NotNil(t, err)
 
-	logger := utils.CreateDefaultLogger()
+	logger := &log.MockLogger{}
 	client, err := NewMQClient(&Config{NameServerAddrs: []string{"addr"}}, "clientid", logger)
 	if err != nil {
 		t.Fatal(err)
@@ -134,23 +135,44 @@ func TestMQClient(t *testing.T) {
 
 	t.Run("update topic router from namesrv", func(t *testing.T) {
 		impl := client.(*mqClient)
-		impl.rpc = &mockRPC{}
+		mockRemoteClient := &mockRemoteClient{command: &remote.Command{Body: []byte("{}")}}
+		impl.Client = mockRemoteClient
 
+		// RequestSync error
+		mockRemoteClient.requestSyncErr = errors.New("bad request sync")
 		updated, err := impl.updateTopicRouterInfoFromNamesrv("t")
-		println("===")
 		assert.False(t, updated)
 		assert.NotNil(t, err)
+		mockRemoteClient.requestSyncErr = nil
 
+		// add
 		updated, err = impl.updateTopicRouterInfoFromNamesrv("t")
 		assert.Nil(t, err)
 		assert.True(t, updated)
 		assert.Equal(t, []string{"t"}, impl.routersOfTopic.Topics())
 
-		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
-		assert.True(t, updated)
+		// no updated
 		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
 		assert.False(t, updated)
+
+		// change
+		mockRemoteClient.command.Body = []byte(`{"OrderTopicConf":"new"}`)
+		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
+		assert.True(t, updated)
 	})
+}
+
+type mockRemoteClient struct {
+	*remote.MockClient
+
+	requestSyncErr error
+	command        *remote.Command
+}
+
+func (m *mockRemoteClient) RequestSync(addr string, cmd *remote.Command, timeout time.Duration) (
+	*remote.Command, error,
+) {
+	return m.command, m.requestSyncErr
 }
 
 type mockRPC struct {

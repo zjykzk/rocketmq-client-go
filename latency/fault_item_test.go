@@ -3,8 +3,6 @@ package latency
 import (
 	"testing"
 
-	"qiniu.com/dora-cloud/boots/broker/utils"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,26 +12,26 @@ func TestFaultItem(t *testing.T) {
 	assert.False(t, f1.less(f2))
 	assert.False(t, f2.less(f1))
 
-	now := utils.NowMillis()
+	now := unixMillis()
 	f1.availableTimeMillis, f2.availableTimeMillis = now, now
 	f2.latencyMillis = 2
 	assert.True(t, f1.less(f2))
 	assert.False(t, f2.less(f1))
 
-	now = utils.NowMillis()
+	now = unixMillis()
 	f1.availableTimeMillis, f2.availableTimeMillis = now, now
 	f2.latencyMillis = 1
 	f2.availableTimeMillis += 21
 	assert.True(t, f1.less(f2))
 	assert.False(t, f2.less(f1))
 
-	now = utils.NowMillis()
+	now = unixMillis()
 	f1.availableTimeMillis, f2.availableTimeMillis = now-1, now-1
 	f2.availableTimeMillis -= 19
 	assert.False(t, f1.less(f2))
 	assert.True(t, f2.less(f1))
 
-	now = utils.NowMillis()
+	now = unixMillis()
 	f1.availableTimeMillis, f2.availableTimeMillis = now+1, now+1
 	f2.latencyMillis = 100
 	f2.availableTimeMillis -= 100

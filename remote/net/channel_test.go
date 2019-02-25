@@ -9,10 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"qiniu.com/dora-cloud/boots/broker/utils"
-
-	"github.com/qiniu/log.v1"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/zjykzk/rocketmq-client-go/log"
 )
 
 func echoDecode(data []byte) (interface{}, error) {
@@ -30,7 +29,7 @@ func echoReadPacket(r io.Reader) ([]byte, error) {
 }
 
 type fakeHandler struct {
-	logger *log.Logger
+	logger log.Logger
 }
 
 func (h *fakeHandler) OnActive(ctx *ChannelContext) {
@@ -114,9 +113,9 @@ func TestChannel(t *testing.T) {
 
 	ch, err := newChannel("localhost:"+port,
 		EncoderFunc(echoEncode), PacketReaderFunc(echoReadPacket), DecoderFunc(echoDecode),
-		&fakeHandler{logger: utils.CreateDefaultLogger()},
+		&fakeHandler{logger: &log.MockLogger{}},
 		&Config{ReadTimeout: time.Second, WriteTimeout: time.Second, DialTimeout: time.Second},
-		utils.CreateDefaultLogger())
+		&log.MockLogger{})
 	if err != nil {
 		t.Fatal(err)
 	}

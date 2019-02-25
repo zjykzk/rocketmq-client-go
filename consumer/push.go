@@ -36,7 +36,7 @@ type consumerService interface {
 // PushConsumer the consumer with push model
 type PushConsumer struct {
 	*consumer
-	MaxReconsumeTimes       int32
+	MaxReconsumeTimes       int
 	LastestConsumeTimestamp time.Time
 	ConsumeTimeout          time.Duration
 

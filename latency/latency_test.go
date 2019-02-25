@@ -94,7 +94,7 @@ func TestSelectOneQueue(t *testing.T) {
 	q = fs.SelectOneQueue(tp, "b1")
 	assert.Equal(t, "b2", q.BrokerName)
 	assert.Equal(t, "b2", q.Topic)
-	assert.Equal(t, 1, q.QueueID)
+	assert.Equal(t, uint8(1), q.QueueID)
 	fs.UpdateFault("b1", 0, true)
 	fs.UpdateFault("b2", 0, true)
 

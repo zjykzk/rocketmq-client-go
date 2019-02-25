@@ -46,7 +46,7 @@ func TestRemoteStore(t *testing.T) {
 	// read from store
 	mockRemoteOper.fetchRet = 10
 	of, err := rs.readOffsetFromStore(q)
-	assert.Equal(t, 10, of)
+	assert.Equal(t, int64(10), of)
 	assert.Equal(t, mockRemoteOper.fetchErr, err)
 
 	rs.updateOffset(q, 0)

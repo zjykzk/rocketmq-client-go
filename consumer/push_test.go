@@ -9,10 +9,10 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
-	"qiniu.com/dora-cloud/boots/broker/utils"
 )
 
 type mockConsumerService struct {
@@ -48,7 +48,7 @@ func (m *mockConsumerService) insertNewMessageQueue(mq *message.Queue) (*process
 
 func newTestConcurrentConsumer() *PushConsumer {
 	pc, err := NewConcurrentConsumer(
-		"test push consumer", []string{"dummy"}, &mockConcurrentlyConsumer{}, utils.CreateDefaultLogger(),
+		"test push consumer", []string{"dummy"}, &mockConcurrentlyConsumer{}, &log.MockLogger{},
 	)
 	if err != nil {
 		panic(err)
@@ -58,7 +58,7 @@ func newTestConcurrentConsumer() *PushConsumer {
 }
 
 func TestNewPushConsumer(t *testing.T) {
-	pc := newPushConsumer("group", []string{}, utils.CreateDefaultLogger())
+	pc := newPushConsumer("group", []string{}, &log.MockLogger{})
 	assert.NotNil(t, pc)
 	assert.Equal(t, pc.MaxReconsumeTimes, defaultPushMaxReconsumeTimes)
 	assert.Equal(t, pc.LastestConsumeTimestamp, defaultLastestConsumeTimestamp)
@@ -220,14 +220,14 @@ func TestComputeFromLastOffset(t *testing.T) {
 	mockOffseter.offset = 2
 	offset, err := pc.computeFromLastOffset(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, offset)
+	assert.Equal(t, int64(2), offset)
 
 	// from remote
 	mockOffseter.readOffsetErr = errOffsetNotExist
 	mockRPC.maxOffset = 22
 	offset, err = pc.computeWhereToPull(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 22, offset)
+	assert.Equal(t, int64(22), offset)
 
 	// bad readoffset
 	mockOffseter.readOffsetErr = errors.New("bad readoffset")
@@ -239,7 +239,7 @@ func TestComputeFromLastOffset(t *testing.T) {
 	mockOffseter.readOffsetErr = errOffsetNotExist
 	offset, err = pc.computeWhereToPull(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 0, offset)
+	assert.Equal(t, int64(0), offset)
 
 	// bad maxoffset offset
 	q.Topic = ""
@@ -252,7 +252,7 @@ func TestComputeFromLastOffset(t *testing.T) {
 	q.Topic = rocketmq.RetryGroupTopicPrefix + "t"
 	offset, err = pc.computeFromLastOffset(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 0, offset)
+	assert.Equal(t, int64(0), offset)
 }
 
 func TestComputeFromFirstOffset(t *testing.T) {
@@ -269,13 +269,13 @@ func TestComputeFromFirstOffset(t *testing.T) {
 	mockOffseter.offset = 2
 	offset, err := pc.computeFromFirstOffset(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, offset)
+	assert.Equal(t, int64(2), offset)
 
 	// not exist
 	mockOffseter.readOffsetErr = errOffsetNotExist
 	offset, err = pc.computeFromFirstOffset(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 0, offset)
+	assert.Equal(t, int64(0), offset)
 
 	// bad readoffset
 	mockOffseter.readOffsetErr = errors.New("bad readoffset")
@@ -297,7 +297,7 @@ func TestComputeFromTimestamp(t *testing.T) {
 	mockOffseter.offset = 2
 	offset, err := pc.computeFromTimestamp(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, offset)
+	assert.Equal(t, int64(2), offset)
 
 	// offseter search error
 	mockOffseter.readOffsetErr = errors.New("bad read offset")
@@ -311,14 +311,14 @@ func TestComputeFromTimestamp(t *testing.T) {
 	mockOffseter.readOffsetErr = errOffsetNotExist
 	offset, err = pc.computeFromTimestamp(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 100, offset)
+	assert.Equal(t, int64(100), offset)
 
 	// not exist, search remote suc
 	q.Topic = ""
 	mockRPC.searchOffsetByTimestampRet = 200
 	offset, err = pc.computeFromTimestamp(q)
 	assert.Nil(t, err)
-	assert.Equal(t, 200, offset)
+	assert.Equal(t, int64(200), offset)
 
 	// not exist search failed
 	mockRPC.searchOffsetByTimestampErr = &remote.RPCError{}

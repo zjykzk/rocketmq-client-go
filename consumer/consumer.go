@@ -87,7 +87,7 @@ type consumer struct {
 
 	client client.MQClient
 
-	Logger *log.Logger
+	Logger log.Logger
 }
 
 // Start the works of consumer

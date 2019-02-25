@@ -132,48 +132,6 @@ func (r *RPC) GetConsumerIDs(addr, group string, to time.Duration) (
 	return
 }
 
-type unregisterClientHeader struct {
-	clientID      string
-	producerGroup string
-	consumerGroup string
-}
-
-func (uh *unregisterClientHeader) ToMap() map[string]string {
-	ret := map[string]string{
-		"clientID": uh.clientID,
-	}
-
-	if uh.producerGroup != "" {
-		ret["producerGroup"] = uh.producerGroup
-	}
-
-	if uh.consumerGroup != "" {
-		ret["consumerGroup"] = uh.consumerGroup
-	}
-
-	return ret
-}
-
-// UnregisterClient unregister the producer/consumer group from broker
-func (r *RPC) UnregisterClient(addr, clientID, pGroup, cGroup string, to time.Duration) (
-	err error,
-) {
-	h := &unregisterClientHeader{
-		clientID:      clientID,
-		producerGroup: pGroup,
-		consumerGroup: cGroup,
-	}
-	cmd, err := r.client.RequestSync(addr, NewCommand(UnregisterClient, h), to)
-	if err != nil {
-		return
-	}
-
-	if cmd.Code != Success {
-		err = brokerError(cmd)
-	}
-	return
-}
-
 type queryConsumerOffsetRequestHeader struct {
 	group   string
 	topic   string

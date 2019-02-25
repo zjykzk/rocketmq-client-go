@@ -7,12 +7,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
-	"qiniu.com/dora-cloud/boots/broker/mq"
 )
 
 var (
@@ -28,7 +28,7 @@ func TestAdmin(t *testing.T) {
 	a := NewAdmin(namesrvAddrs, logger)
 	assert.Nil(t, a.Start())
 
-	assert.Equal(t, a.state, mq.StateRunning)
+	assert.Equal(t, a.state, rocketmq.StateRunning)
 	assert.Equal(t, 1, a.client.AdminCount())
 	assert.True(t, a.ClientID != "")
 	assert.True(t, a.InstanceName != "")

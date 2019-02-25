@@ -144,7 +144,7 @@ func TestStartShutdown(t *testing.T) {
 	defer cs.shutdown()
 
 	assert.Equal(t, 1, len(cs.messageSendBack.(*mockSendback).msgs))
-	assert.Equal(t, 1, cs.consumer.(*mockConcurrentlyConsumer).consumeCount)
+	assert.Equal(t, int32(1), cs.consumer.(*mockConcurrentlyConsumer).consumeCount)
 }
 
 func TestSubmitRequestSuccess(t *testing.T) {
@@ -197,7 +197,7 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 
 		assert.Equal(t, 0, pq.messages.Size())
 		assert.True(t, offsetUpdater.runUpdate)
-		assert.Equal(t, 3, offsetUpdater.offset)
+		assert.Equal(t, int64(3), offsetUpdater.offset)
 	})
 
 	t.Run("clustering", func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 		)
 		assert.Equal(t, 0, pq.messages.Size())
 		assert.True(t, offsetUpdater.runUpdate)
-		assert.Equal(t, 3, offsetUpdater.offset)
+		assert.Equal(t, int64(3), offsetUpdater.offset)
 		assert.True(t, sendbacker.runSendback)
 
 		// two message and send back failed
@@ -248,7 +248,7 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 		)
 		assert.Equal(t, 2, pq.messages.Size())
 		assert.True(t, offsetUpdater.runUpdate)
-		assert.Equal(t, 1, offsetUpdater.offset)
+		assert.Equal(t, int64(1), offsetUpdater.offset)
 		assert.True(t, sendbacker.runSendback)
 
 		// sendback ok, process dropped
@@ -264,7 +264,7 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 		)
 
 		assert.False(t, offsetUpdater.runUpdate)
-		assert.Equal(t, -1, offsetUpdater.offset)
+		assert.Equal(t, int64(-1), offsetUpdater.offset)
 	})
 }
 
@@ -288,7 +288,7 @@ func TestConsumeConcurrentlyProcessResultSuc(t *testing.T) {
 		)
 		assert.Equal(t, 0, pq.messages.Size())
 		assert.True(t, offsetUpdater.runUpdate)
-		assert.Equal(t, 3, offsetUpdater.offset)
+		assert.Equal(t, int64(3), offsetUpdater.offset)
 	})
 
 	t.Run("clustering", func(t *testing.T) {
@@ -322,7 +322,7 @@ func TestConsumeConcurrentlyProcessResultSuc(t *testing.T) {
 		)
 		assert.Equal(t, 0, pq.messages.Size())
 		assert.True(t, offsetUpdater.runUpdate)
-		assert.Equal(t, 3, offsetUpdater.offset)
+		assert.Equal(t, int64(3), offsetUpdater.offset)
 
 		// two message and send back failed
 		sendbacker.sendErr = errors.New("sendback failed")
@@ -335,7 +335,7 @@ func TestConsumeConcurrentlyProcessResultSuc(t *testing.T) {
 		)
 		assert.Equal(t, 1, pq.messages.Size())
 		assert.True(t, offsetUpdater.runUpdate)
-		assert.Equal(t, 2, offsetUpdater.offset)
+		assert.Equal(t, int64(2), offsetUpdater.offset)
 		assert.True(t, sendbacker.runSendback)
 	})
 }

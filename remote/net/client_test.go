@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"qiniu.com/dora-cloud/boots/broker/utils"
+	"github.com/zjykzk/rocketmq-client-go/log"
 )
 
 type mockRequest []byte
@@ -46,7 +46,7 @@ func TestClient(t *testing.T) {
 	c := NewClient(
 		EncoderFunc(encodeMockRequest), PacketReaderFunc(mockPacketReader), DecoderFunc(decodeMockResponse),
 		&Config{ReadTimeout: time.Second, WriteTimeout: time.Second, DialTimeout: time.Second},
-		utils.CreateDefaultLogger())
+		&log.MockLogger{})
 	c.Start()
 	defer c.Shutdown()
 	t.Run("request sync", func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestFuture(t *testing.T) {
 	c := NewClient(
 		EncoderFunc(encodeMockRequest), PacketReaderFunc(mockPacketReader), DecoderFunc(decodeMockResponse),
 		&Config{ReadTimeout: time.Second, WriteTimeout: time.Second, DialTimeout: time.Second},
-		utils.CreateDefaultLogger(),
+		&log.MockLogger{},
 	)
 
 	var (

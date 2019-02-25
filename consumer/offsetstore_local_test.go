@@ -47,28 +47,28 @@ func TestLocalOffset(t *testing.T) {
 	ls.updateOffset(q, 1)
 	of, err := ls.readOffset(q, ReadOffsetFromMemory)
 	assert.Nil(t, err)
-	assert.Equal(t, 1, of)
+	assert.Equal(t, int64(1), of)
 
 	ls.updateOffsetIfGreater(q, 0)
 	of, err = ls.readOffset(q, ReadOffsetFromMemory)
 	assert.Nil(t, err)
-	assert.Equal(t, 1, of)
+	assert.Equal(t, int64(1), of)
 
 	ls.updateOffsetIfGreater(q, 2)
 	of, err = ls.readOffset(q, ReadOffsetFromMemory)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, of)
+	assert.Equal(t, int64(2), of)
 
 	of, err = ls.readOffset(q, ReadOffsetFromStore)
 	assert.Nil(t, err)
 
 	of, err = ls.readOffset(q, ReadOffsetMemoryFirstThenStore)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, of)
+	assert.Equal(t, int64(2), of)
 
 	of, err = ls.readOffset(&message.Queue{BrokerName: "notexist"}, ReadOffsetFromMemory)
 	assert.Nil(t, err)
-	assert.Equal(t, -1, of)
+	assert.Equal(t, int64(-1), of)
 
 	of, err = ls.readOffset(&message.Queue{BrokerName: "notexist"}, ReadOffsetMemoryFirstThenStore)
 	assert.Nil(t, err)
@@ -90,11 +90,11 @@ func TestLocalOffset(t *testing.T) {
 	assert.Nil(t, ls.load())
 	of, err = ls.readOffset(q, ReadOffsetFromMemory)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, of)
+	assert.Equal(t, int64(2), of)
 
 	of, err = ls.readOffset(q, ReadOffsetFromStore)
 	assert.Nil(t, err)
-	assert.Equal(t, 2, of)
+	assert.Equal(t, int64(2), of)
 
 	// get the offsets and message queue
 	ls.updateOffset(&message.Queue{BrokerName: "n", Topic: "t"}, 3)
