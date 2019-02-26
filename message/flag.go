@@ -1,5 +1,6 @@
-package flag
+package message
 
+// predefined tags
 const (
 	Compress                = 1
 	MultiTags               = 1 << 1

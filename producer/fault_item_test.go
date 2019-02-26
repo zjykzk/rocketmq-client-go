@@ -1,4 +1,4 @@
-package latency
+package producer
 
 import (
 	"testing"

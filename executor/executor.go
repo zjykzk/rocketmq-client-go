@@ -83,9 +83,11 @@ func NewPoolExecutor(
 		queue:        queue,
 		ready:        make([]*workerChan, 0, 32),
 		stopCh:       make(chan struct{}),
-		workerChanPool: sync.Pool{New: func() interface{} {
-			return &workerChan{ch: make(chan Runnable, workerChanCap)}
-		}},
+		workerChanPool: sync.Pool{
+			New: func() interface{} {
+				return &workerChan{ch: make(chan Runnable, workerChanCap)}
+			},
+		},
 	}
 
 	ex.hasWorker = sync.NewCond(&ex.locker)
@@ -93,6 +95,71 @@ func NewPoolExecutor(
 	ex.start()
 
 	return ex, nil
+}
+
+func (e *GoroutinePoolExecutor) start() {
+	e.setState(running)
+	e.wgWrap(func() {
+		idleWorkers := make([]*workerChan, 0, 128)
+		select {
+		case <-e.stopCh:
+			return
+		default:
+			e.cleanIdle(&idleWorkers)
+		}
+	})
+
+	e.wgWrap(func() {
+		e.startFeedFromQueue()
+	})
+
+}
+
+func (e *GoroutinePoolExecutor) cleanIdle(idleWorkers *[]*workerChan) {
+	now := time.Now()
+	e.locker.Lock()
+	ready := e.ready
+	n, l, maxIdleTime := 0, len(ready), e.maxIdleTime
+	for n < l && now.Sub(e.ready[n].lastUseTime) > maxIdleTime {
+		n++
+	}
+
+	if n > 0 {
+		*idleWorkers = append((*idleWorkers)[:0], ready[:n]...)
+		m := copy(ready, ready[n:])
+		for i := m; i < l; i++ {
+			ready[i] = nil
+		}
+		e.ready = ready[:m]
+	}
+	e.locker.Unlock()
+
+	tmp := *idleWorkers
+	for i, w := range tmp {
+		w.ch <- nil
+		tmp[i] = nil
+	}
+}
+
+func (e *GoroutinePoolExecutor) startFeedFromQueue() {
+	for {
+		r, err := e.queue.Take()
+		if err != nil || r == nil {
+			break
+		}
+
+		e.locker.Lock()
+		for len(e.ready) == 0 {
+			e.hasWorker.Wait()
+		}
+		n := len(e.ready) - 1
+		wch := e.ready[n]
+		e.ready[n] = nil
+		e.ready = e.ready[:n]
+		e.locker.Unlock()
+
+		wch.ch <- r
+	}
 }
 
 // Execute run one task
@@ -138,62 +205,6 @@ func (e *GoroutinePoolExecutor) Execute(r Runnable) error {
 	return nil
 }
 
-// Shutdown shutdown the executor
-func (e *GoroutinePoolExecutor) Shutdown() {
-	e.setState(shutdown)
-	close(e.stopCh)
-
-	e.queue.Put(nil)
-	e.pendingCount.Wait()
-	e.shutdownWorker()
-
-	e.wg.Wait()
-	e.setState(stop)
-}
-
-func (e *GoroutinePoolExecutor) start() {
-	e.setState(running)
-	e.wgWrap(func() {
-		idleWorkers := make([]*workerChan, 0, 128)
-		select {
-		case <-e.stopCh:
-			return
-		default:
-			e.cleanIdle(&idleWorkers)
-		}
-	})
-
-	e.wgWrap(func() {
-		e.startFeedFromQueue()
-	})
-}
-
-func (e *GoroutinePoolExecutor) cleanIdle(idleWorkers *[]*workerChan) {
-	now := time.Now()
-	e.locker.Lock()
-	ready := e.ready
-	n, l, maxIdleTime := 0, len(ready), e.maxIdleTime
-	for n < l && now.Sub(e.ready[n].lastUseTime) > maxIdleTime {
-		n++
-	}
-
-	if n > 0 {
-		*idleWorkers = append((*idleWorkers)[:0], ready[:n]...)
-		m := copy(ready, ready[n:])
-		for i := m; i < l; i++ {
-			ready[i] = nil
-		}
-		e.ready = ready[:m]
-	}
-	e.locker.Unlock()
-
-	tmp := *idleWorkers
-	for i, w := range tmp {
-		w.ch <- nil
-		tmp[i] = nil
-	}
-}
-
 func (e *GoroutinePoolExecutor) getWorkerCh() (w *workerChan, isNew bool) {
 	e.locker.Lock()
 	ready := e.ready
@@ -202,25 +213,34 @@ func (e *GoroutinePoolExecutor) getWorkerCh() (w *workerChan, isNew bool) {
 		w = ready[n]
 		ready[n] = nil
 		e.ready = ready[:n]
-		e.locker.Unlock()
-		return
+	} else {
+		e.ctl++
 	}
-	e.ctl++
 	e.locker.Unlock()
 
-	isNew = true
-	w0 := e.workerChanPool.Get()
-	if w0 != nil {
-		w = w0.(*workerChan)
-	} else {
-		w = &workerChan{ch: make(chan Runnable, workerChanCap)}
+	if w != nil {
+		return
 	}
+
+	isNew = true
+	w = e.workerChanPool.Get().(*workerChan)
 	return
 }
 
 func (e *GoroutinePoolExecutor) startWorker(wch *workerChan) {
-	for r := range wch.ch {
-		if r == nil {
+	var (
+		r  Runnable
+		ok bool
+	)
+
+	for {
+		select {
+		case r, ok = <-wch.ch:
+		case <-e.stopCh:
+			ok = false
+		}
+
+		if !ok {
 			break
 		}
 
@@ -238,30 +258,25 @@ func (e *GoroutinePoolExecutor) startWorker(wch *workerChan) {
 	atomic.AddInt32(&e.ctl, -1)
 }
 
-func (e *GoroutinePoolExecutor) shutdownWorker() {
-	e.locker.RLock()
-	for _, w := range e.ready {
-		close(w.ch)
-	}
-	e.locker.RUnlock()
+// Shutdown shutdown the executor
+func (e *GoroutinePoolExecutor) Shutdown() {
+	e.setState(shutdown)
+
+	e.queue.Put(nil)
+	e.pendingCount.Wait() // wait task to be finished
+	e.shutdownWorker()
+	close(e.stopCh)
+
+	e.wg.Wait()
+	e.setState(stop)
 }
 
-func (e *GoroutinePoolExecutor) startFeedFromQueue() {
-	for {
-		r, err := e.queue.Take()
-		if err != nil || r == nil {
-			break
-		}
-
-		e.hasWorker.L.Lock()
-		for len(e.ready) == 0 {
-			e.hasWorker.Wait()
-		}
-		n := len(e.ready) - 1
-		wch := e.ready[n]
-		e.ready = e.ready[:n]
-		e.hasWorker.L.Unlock()
-		wch.ch <- r
+func (e *GoroutinePoolExecutor) shutdownWorker() {
+	e.locker.RLock()
+	ready := e.ready
+	e.locker.RUnlock()
+	for _, w := range ready {
+		close(w.ch)
 	}
 }
 

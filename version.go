@@ -1,4 +1,4 @@
-package version
+package rocketmq
 
 import "strconv"
 

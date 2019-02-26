@@ -135,30 +135,21 @@ func TestMQClient(t *testing.T) {
 
 	t.Run("update topic router from namesrv", func(t *testing.T) {
 		impl := client.(*mqClient)
-		mockRemoteClient := &mockRemoteClient{command: &remote.Command{Body: []byte("{}")}}
-		impl.Client = mockRemoteClient
+		impl.rpc = &mockRPC{}
 
-		// RequestSync error
-		mockRemoteClient.requestSyncErr = errors.New("bad request sync")
 		updated, err := impl.updateTopicRouterInfoFromNamesrv("t")
 		assert.False(t, updated)
 		assert.NotNil(t, err)
-		mockRemoteClient.requestSyncErr = nil
 
-		// add
 		updated, err = impl.updateTopicRouterInfoFromNamesrv("t")
 		assert.Nil(t, err)
 		assert.True(t, updated)
 		assert.Equal(t, []string{"t"}, impl.routersOfTopic.Topics())
 
-		// no updated
-		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
-		assert.False(t, updated)
-
-		// change
-		mockRemoteClient.command.Body = []byte(`{"OrderTopicConf":"new"}`)
 		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
 		assert.True(t, updated)
+		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
+		assert.False(t, updated)
 	})
 }
 

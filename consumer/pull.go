@@ -11,7 +11,6 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
-	"github.com/zjykzk/rocketmq-client-go/version"
 )
 
 // PullConsumer consumes the messages using pulling method
@@ -219,7 +218,7 @@ func (c *PullConsumer) RunningInfo() client.RunningInfo {
 		"PROP_CONSUMER_START_TIMESTAMP":    strconv.FormatInt(c.startTime.UnixNano()/int64(millis), 10),
 		"PROP_NAMESERVER_ADDR":             strings.Join(c.NameServerAddrs, ";"),
 		"PROP_CONSUME_TYPE":                c.Type(),
-		"PROP_CLIENT_VERSION":              version.CurrentVersion.String(),
+		"PROP_CLIENT_VERSION":              rocketmq.CurrentVersion.String(),
 	}
 	return client.RunningInfo{
 		Properties:    prop,

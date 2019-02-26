@@ -1,4 +1,4 @@
-package config
+package rocketmq
 
 import "time"
 

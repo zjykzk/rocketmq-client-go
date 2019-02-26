@@ -11,6 +11,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/remote"
+	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -49,6 +50,7 @@ type mqClient struct {
 	state    rocketmq.State
 
 	remote.Client
+	rpc rpc
 
 	clientID string
 
@@ -113,6 +115,7 @@ func newMQClient(config *Config, clientID string, logger log.Logger) MQClient {
 		WriteTimeout: time.Millisecond * 100,
 		DialTimeout:  time.Second,
 	}, c.processRequest, logger)
+	c.rpc = rpc.NewRPC(c.Client)
 	return c
 }
 
@@ -181,7 +184,7 @@ func (c *mqClient) unregisterClient(producerGroup, consumerGroup string) {
 	c.Lock()
 	for _, name := range c.brokerAddrs.brokerNames() {
 		for _, addr := range c.brokerAddrs.brokerAddrs(name) {
-			err := unregisterClient(c.Client, addr.addr, clientID, producerGroup, consumerGroup, timeout)
+			err := c.rpc.UnregisterClient(addr.addr, clientID, producerGroup, consumerGroup, timeout)
 			c.logger.Infof(
 				"unregister client p:%s c:%s from addr %s, err:%v",
 				producerGroup, consumerGroup, addr.addr, err,
@@ -341,7 +344,7 @@ func (c *mqClient) getTopicRouteInfo(topic string) (router *route.TopicRouter, e
 	l := len(c.NameServerAddrs)
 	for i, cc := rand.Intn(l), l; cc > 0; i, cc = i+1, cc-1 {
 		addr := c.NameServerAddrs[i%l]
-		router, err = getTopicRouteInfo(c.Client, addr, topic, 3*time.Second)
+		router, err = c.rpc.GetTopicRouteInfo(addr, topic, 3*time.Second)
 		if err == nil {
 			return
 		}
@@ -441,7 +444,7 @@ func (c *mqClient) SendHeartbeat() {
 				continue
 			}
 
-			version, err := sendHeartbeat(c.Client, addr, hr, 3*time.Second)
+			version, err := c.rpc.SendHeartbeat(addr, hr, 3*time.Second)
 			if err != nil {
 				c.logger.Error("send heartbeat to " + addr + " failed, err:" + err.Error())
 				if c.isBrokerAddrInRouter(addr) {

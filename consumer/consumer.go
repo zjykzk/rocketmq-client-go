@@ -11,7 +11,6 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
-	"github.com/zjykzk/rocketmq-client-go/config"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
@@ -43,7 +42,7 @@ type MessageQueueChanger interface {
 
 // Config the configuration of consumer
 type Config struct {
-	config.Client
+	rocketmq.Client
 	ReblanceInterval time.Duration
 	MessageModel     Model
 	Typ              Type
@@ -55,7 +54,7 @@ const (
 )
 
 var defaultConfig = Config{
-	Client: config.Client{
+	Client: rocketmq.Client{
 		HeartbeatBrokerInterval:       30 * time.Second,
 		PollNameServerInterval:        30 * time.Second,
 		PersistConsumerOffsetInterval: 5 * time.Second,

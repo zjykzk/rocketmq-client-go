@@ -1,25 +1,26 @@
-package remote
+package rpc
 
 import (
 	"encoding/json"
 	"strconv"
 	"time"
+
+	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/remote"
 )
 
 // BrokerRuntimeInfo returns the broker runtime information.
 func (r *RPC) BrokerRuntimeInfo(addr string, timeout time.Duration) (
 	map[string]string, error,
 ) {
-	cmd, err := r.client.RequestSync(addr,
-		NewCommand(GetBrokerRuntimeInfo, nil),
-		timeout)
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(GetBrokerRuntimeInfo, nil), timeout)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if cmd.Code != Success {
-		return nil, brokerError(cmd)
+		return nil, remote.BrokerError(cmd)
 	}
 
 	var ret map[string]map[string]string
@@ -65,14 +66,14 @@ func (r *RPC) CreateOrUpdateTopic(addr string, header *CreateOrUpdateTopicHeader
 ) {
 	cmd, err := r.client.RequestSync(
 		addr,
-		NewCommand(UpdateAndCreateTopic, header),
+		remote.NewCommand(UpdateAndCreateTopic, header),
 		to)
 	if err != nil {
 		return
 	}
 
 	if cmd.Code != Success {
-		err = brokerError(cmd)
+		err = remote.BrokerError(cmd)
 	}
 	return
 }
@@ -86,13 +87,13 @@ func (h deleteTopicHeader) ToMap() map[string]string {
 // DeleteTopicInBroker delete topic in the broker
 func (r *RPC) DeleteTopicInBroker(addr, topic string, to time.Duration) (err error) {
 	h := deleteTopicHeader(topic)
-	cmd, err := r.client.RequestSync(addr, NewCommand(DeleteTopicInBroker, h), to)
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(DeleteTopicInBroker, h), to)
 	if err != nil {
 		return
 	}
 
 	if cmd.Code != Success {
-		err = brokerError(cmd)
+		err = remote.BrokerError(cmd)
 	}
 	return
 }
@@ -206,4 +207,70 @@ func (r *RPC) UpdateConsumerOffsetOneway(addr, topic, group string, queueID int,
 		offset:  offset,
 	}
 	return r.client.RequestOneway(addr, NewCommand(UpdateConsumerOffset, h))
+}
+
+// SendHeartbeat send the heartbeat to the broker
+func (r *RPC) SendHeartbeat(addr string, heartbeat *client.HeartbeatRequest, to time.Duration) (
+	version int64, err error,
+) {
+	data, err := json.Marshal(heartbeat)
+	if err != nil {
+		return
+	}
+
+	cmd, err := r.client.RequestSync(
+		addr, NewCommandWithBody(HeartBeat, nil, data), to,
+	)
+	if err != nil {
+		return
+	}
+
+	if cmd.Code != Success {
+		err = brokerError(cmd)
+	}
+
+	version = cmd.Version
+	return
+}
+
+type unregisterClientHeader struct {
+	clientID      string
+	producerGroup string
+	consumerGroup string
+}
+
+func (uh *unregisterClientHeader) ToMap() map[string]string {
+	ret := map[string]string{
+		"clientID": uh.clientID,
+	}
+
+	if uh.producerGroup != "" {
+		ret["producerGroup"] = uh.producerGroup
+	}
+
+	if uh.consumerGroup != "" {
+		ret["consumerGroup"] = uh.consumerGroup
+	}
+
+	return ret
+}
+
+// UnregisterClient unregister the producer/consumer group from broker
+func (r *RPC) UnregisterClient(addr, clientID, pGroup, cGroup string, to time.Duration) (
+	err error,
+) {
+	h := &unregisterClientHeader{
+		clientID:      clientID,
+		producerGroup: pGroup,
+		consumerGroup: cGroup,
+	}
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(UnregisterClient, h), to)
+	if err != nil {
+		return
+	}
+
+	if cmd.Code != Success {
+		err = remote.BrokerError(cmd)
+	}
+	return
 }

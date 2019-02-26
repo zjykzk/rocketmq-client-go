@@ -97,10 +97,9 @@ func TestShutdown(t *testing.T) {
 		}
 	}
 	assert.True(t, e.queue.Size() > 0)
-	time.Sleep(time.Millisecond)
+	assert.Equal(t, 6, e.workerCountOf())
 	e.Shutdown()
 	assert.Equal(t, stop, e.state())
 	assert.Equal(t, 0, e.queue.Size())
-	time.Sleep(time.Millisecond * 10)
 	assert.Equal(t, taskCount, int(c.count))
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
-	"github.com/zjykzk/rocketmq-client-go/config"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
@@ -19,7 +18,7 @@ import (
 
 // Admin admin operations
 type Admin struct {
-	config.Client
+	rocketmq.Client
 	state    rocketmq.State
 	rpc      rpc
 	exitChan chan int
@@ -32,7 +31,7 @@ type Admin struct {
 // NewAdmin create admin operator
 func NewAdmin(namesrvAddrs []string, logger log.Logger) *Admin {
 	a := &Admin{
-		Client: config.Client{
+		Client: rocketmq.Client{
 			HeartbeatBrokerInterval:       30 * time.Second,
 			PollNameServerInterval:        30 * time.Second,
 			PersistConsumerOffsetInterval: 5 * time.Second,

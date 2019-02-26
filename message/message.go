@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/zjykzk/rocketmq-client-go/buf"
-	"github.com/zjykzk/rocketmq-client-go/flag"
 )
 
 // Message the message
@@ -248,7 +247,7 @@ AGAIN:
 
 	if bodyLen > 0 {
 		bs, err = buf.GetBytes(int(bodyLen))
-		if (m.SysFlag & flag.Compress) == flag.Compress {
+		if (m.SysFlag & Compress) == Compress {
 			z, err := zlib.NewReader(bytes.NewReader(bs))
 			if err != nil {
 				return nil, err

@@ -10,9 +10,6 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
-	"github.com/zjykzk/rocketmq-client-go/config"
-	"github.com/zjykzk/rocketmq-client-go/flag"
-	"github.com/zjykzk/rocketmq-client-go/latency"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
@@ -21,7 +18,7 @@ import (
 
 // Config the configuration of producer
 type Config struct {
-	config.Client
+	rocketmq.Client
 	SendMsgTimeout                   time.Duration
 	CompressSizeThreshod             int32
 	RetryTimesWhenSendFailed         int32
@@ -33,7 +30,7 @@ type Config struct {
 }
 
 var defaultConfig = Config{
-	Client: config.Client{
+	Client: rocketmq.Client{
 		HeartbeatBrokerInterval:       30 * time.Second,
 		PollNameServerInterval:        30 * time.Second,
 		PersistConsumerOffsetInterval: 5 * time.Second,
@@ -56,7 +53,7 @@ type Producer struct {
 	topicPublishInfos topicPublishInfoTable
 	client            client.MQClient
 	rpc               rpc
-	mqFaultStrategy   *latency.MQFaultStrategy
+	mqFaultStrategy   *MQFaultStrategy
 
 	Logger log.Logger
 }
@@ -108,7 +105,7 @@ func (p *Producer) start() (err error) {
 
 	err = p.client.Start()
 	p.rpc = remote.NewRPC(p.client.RemotingClient())
-	p.mqFaultStrategy = latency.NewMQFaultStrategy(true)
+	p.mqFaultStrategy = NewMQFaultStrategy(true)
 	return
 }
 
@@ -217,7 +214,7 @@ func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err err
 
 	sysFlag := int32(0)
 	if p.tryToCompress(m) {
-		sysFlag |= flag.Compress
+		sysFlag |= message.Compress
 	}
 
 	var (

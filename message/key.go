@@ -1,6 +1,6 @@
 package message
 
-// predefined consts
+// predefined keys
 const (
 	PropertyKeys                      = "KEYS"
 	PropertyTags                      = "TAGS"
