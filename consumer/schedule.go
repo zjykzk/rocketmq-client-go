@@ -127,24 +127,16 @@ func (q *delayedWorkQueue) signal() {
 		for {
 			select {
 			case <-q.newLastest: // new task with shortest delay inserted
+				var delay time.Duration
 				q.lock.Lock()
-				delay := q.queue[0].getDelay()
+				if len(q.queue) > 0 { // case: the fresh task is consumed at timer timeout
+					delay = q.queue[0].getDelay()
+				}
 				q.lock.Unlock()
 
 				timer.Reset(delay)
 			case <-timer.C:
-				delay, tasks := time.Duration(0), make([]*scheduledTask, 0, 8)
-
-				q.lock.Lock()
-				for len(q.queue) > 0 {
-					t := q.queue[0]
-					if delay = t.getDelay(); delay > 0 {
-						break
-					}
-					tasks = append(tasks, t)
-					heap.Pop(q)
-				}
-				q.lock.Unlock()
+				tasks, delay := q.takeReadysAndNextDelay()
 
 				for _, t := range tasks {
 					q.readyTasks <- t
@@ -160,6 +152,23 @@ func (q *delayedWorkQueue) signal() {
 			}
 		}
 	}()
+}
+
+func (q *delayedWorkQueue) takeReadysAndNextDelay() ([]*scheduledTask, time.Duration) {
+	delay, tasks := time.Duration(0), make([]*scheduledTask, 0, 8)
+
+	q.lock.Lock()
+	for len(q.queue) > 0 {
+		t := q.queue[0]
+		if delay = t.getDelay(); delay > 0 {
+			break
+		}
+		tasks = append(tasks, t)
+		heap.Pop(q)
+	}
+	q.lock.Unlock()
+
+	return tasks, delay
 }
 
 func (q *delayedWorkQueue) shutdown() {

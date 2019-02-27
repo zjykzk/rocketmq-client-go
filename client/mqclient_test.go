@@ -8,7 +8,6 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/remote"
-	"github.com/zjykzk/rocketmq-client-go/route"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -98,7 +97,7 @@ func TestMQClient(t *testing.T) {
 		}
 		c := hd.Consumers[0]
 		assert.Equal(t, mc.group, c.Group)
-		assert.Equal(t, mc.Subscriptions(), c.Subscription)
+		assert.Equal(t, toRPCSubscriptionDatas(mc.Subscriptions()), c.Subscription)
 		assert.Equal(t, mc.ConsumeFromWhere(), c.FromWhere)
 		assert.Equal(t, mc.Model(), c.Model)
 		assert.Equal(t, mc.Type(), c.Type)
@@ -135,21 +134,31 @@ func TestMQClient(t *testing.T) {
 
 	t.Run("update topic router from namesrv", func(t *testing.T) {
 		impl := client.(*mqClient)
-		impl.rpc = &mockRPC{}
+		mockRemoteClient := &mockRemoteClient{}
+		impl.Client = mockRemoteClient
 
+		// bad request
+		mockRemoteClient.requestSyncErr = errors.New("bad request")
 		updated, err := impl.updateTopicRouterInfoFromNamesrv("t")
 		assert.False(t, updated)
 		assert.NotNil(t, err)
+		mockRemoteClient.requestSyncErr = nil
 
+		// add
+		mockRemoteClient.command.Body = []byte(`{}`)
 		updated, err = impl.updateTopicRouterInfoFromNamesrv("t")
 		assert.Nil(t, err)
 		assert.True(t, updated)
 		assert.Equal(t, []string{"t"}, impl.routersOfTopic.Topics())
 
-		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
-		assert.True(t, updated)
+		// no updated
 		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
 		assert.False(t, updated)
+
+		// change
+		mockRemoteClient.command.Body = []byte(`{"OrderTopicConf":"new"}`)
+		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
+		assert.True(t, updated)
 	})
 }
 
@@ -157,43 +166,11 @@ type mockRemoteClient struct {
 	*remote.MockClient
 
 	requestSyncErr error
-	command        *remote.Command
+	command        remote.Command
 }
 
 func (m *mockRemoteClient) RequestSync(addr string, cmd *remote.Command, timeout time.Duration) (
 	*remote.Command, error,
 ) {
-	return m.command, m.requestSyncErr
-}
-
-type mockRPC struct {
-	topicRouterInfoCallCount int
-}
-
-func (r *mockRPC) GetTopicRouteInfo(addr string, topic string, to time.Duration) (
-	*route.TopicRouter, error,
-) {
-	c := r.topicRouterInfoCallCount
-	r.topicRouterInfoCallCount++
-
-	switch c {
-	case 0:
-		return nil, errors.New("error")
-	case 1:
-		return &route.TopicRouter{}, nil
-	case 2:
-		fallthrough
-	case 3:
-		return &route.TopicRouter{
-			OrderTopicConf: "ignore",
-			Queues:         []*route.TopicQueue{&route.TopicQueue{}},
-			Brokers:        []*route.Broker{&route.Broker{}},
-		}, nil
-	default:
-		return nil, nil
-	}
-}
-
-func (r *mockRPC) UnregisterClient(addr, clientID, pGroup, cGroup string, to time.Duration) error {
-	return nil
+	return &m.command, m.requestSyncErr
 }

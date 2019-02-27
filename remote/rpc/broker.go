@@ -2,10 +2,10 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/remote"
 )
 
@@ -16,7 +16,7 @@ func (r *RPC) BrokerRuntimeInfo(addr string, timeout time.Duration) (
 	cmd, err := r.client.RequestSync(addr, remote.NewCommand(GetBrokerRuntimeInfo, nil), timeout)
 
 	if err != nil {
-		return nil, err
+		return nil, remote.RequestError(err)
 	}
 
 	if cmd.Code != Success {
@@ -28,7 +28,7 @@ func (r *RPC) BrokerRuntimeInfo(addr string, timeout time.Duration) (
 	err = json.Unmarshal(cmd.Body, &ret)
 
 	if err != nil {
-		return nil, err
+		return nil, remote.DataError(err)
 	}
 
 	return ret["table"], nil
@@ -64,12 +64,9 @@ func (h *CreateOrUpdateTopicHeader) ToMap() map[string]string {
 func (r *RPC) CreateOrUpdateTopic(addr string, header *CreateOrUpdateTopicHeader, to time.Duration) (
 	err error,
 ) {
-	cmd, err := r.client.RequestSync(
-		addr,
-		remote.NewCommand(UpdateAndCreateTopic, header),
-		to)
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(UpdateAndCreateTopic, header), to)
 	if err != nil {
-		return
+		return remote.RequestError(err)
 	}
 
 	if cmd.Code != Success {
@@ -89,7 +86,7 @@ func (r *RPC) DeleteTopicInBroker(addr, topic string, to time.Duration) (err err
 	h := deleteTopicHeader(topic)
 	cmd, err := r.client.RequestSync(addr, remote.NewCommand(DeleteTopicInBroker, h), to)
 	if err != nil {
-		return
+		return remote.RequestError(err)
 	}
 
 	if cmd.Code != Success {
@@ -109,13 +106,13 @@ func (r *RPC) GetConsumerIDs(addr, group string, to time.Duration) (
 	ids []string, err error,
 ) {
 	g := getConsumerIDsHeader(group)
-	cmd, err := r.client.RequestSync(addr, NewCommand(GetConsumerListByGroup, g), to)
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(GetConsumerListByGroup, g), to)
 	if err != nil {
 		return
 	}
 
 	if cmd.Code != Success {
-		err = brokerError(cmd)
+		err = remote.BrokerError(cmd)
 		return
 	}
 
@@ -129,6 +126,8 @@ func (r *RPC) GetConsumerIDs(addr, group string, to time.Duration) (
 	err = json.Unmarshal(cmd.Body, rp)
 	if err == nil {
 		ids = rp.IDs
+	} else {
+		err = remote.DataError(err)
 	}
 	return
 }
@@ -149,23 +148,26 @@ func (qo *queryConsumerOffsetRequestHeader) ToMap() map[string]string {
 
 // QueryConsumerOffset returns the offset of the specified topic and group
 func (r *RPC) QueryConsumerOffset(addr, topic, group string, queueID int, to time.Duration) (
-	offset int64, err error,
+	int64, *remote.RPCError,
 ) {
 	h := &queryConsumerOffsetRequestHeader{
 		group:   group,
 		topic:   topic,
 		queueID: queueID,
 	}
-	cmd, err := r.client.RequestSync(addr, NewCommand(QueryConsumerOffset, h), to)
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(QueryConsumerOffset, h), to)
 	if err != nil {
-		return
+		return 0, remote.RequestError(err)
 	}
 
 	if cmd.Code != Success {
-		err = brokerError(cmd)
+		err = remote.BrokerError(cmd)
 	}
-	offset, err = strconv.ParseInt(cmd.ExtFields["offset"], 10, 64)
-	return
+	offset, err := strconv.ParseInt(cmd.ExtFields["offset"], 10, 64)
+	if err != nil {
+		return 0, remote.DataError(err)
+	}
+	return offset, nil
 }
 
 type updateConsumerOffsetRequestHeader struct {
@@ -194,7 +196,7 @@ func (r *RPC) UpdateConsumerOffset(
 		queueID: queueID,
 		offset:  offset,
 	}
-	_, err := r.client.RequestSync(addr, NewCommand(UpdateConsumerOffset, h), to)
+	_, err := r.client.RequestSync(addr, remote.NewCommand(UpdateConsumerOffset, h), to)
 	return err
 }
 
@@ -206,27 +208,75 @@ func (r *RPC) UpdateConsumerOffsetOneway(addr, topic, group string, queueID int,
 		queueID: queueID,
 		offset:  offset,
 	}
-	return r.client.RequestOneway(addr, NewCommand(UpdateConsumerOffset, h))
+	return r.client.RequestOneway(addr, remote.NewCommand(UpdateConsumerOffset, h))
+}
+
+// HeartbeatRequest heartbeat request data
+type HeartbeatRequest struct {
+	ClientID  string      `json:"clientID"`
+	Producers []Producer  `json:"producerDataSet"`
+	Consumers []*Consumer `json:"consumerDataSet"`
+}
+
+func (h *HeartbeatRequest) String() string {
+	return fmt.Sprintf("HeartbeatRequest [ClientID="+h.ClientID+
+		",Producers=%v,Consumers=%v]", h.Producers, h.Consumers)
+}
+
+// Producer producer's data in the heartbeat
+type Producer struct {
+	Group string `json:"groupName"`
+}
+
+func (p *Producer) String() string {
+	return "Producer [group=" + p.Group + "]"
+}
+
+// Consumer consumer's data in the heartbeat
+type Consumer struct {
+	Group        string  `json:"groupName"`
+	Type         string  `json:"consumeType"`
+	Model        string  `json:"messageModel"`
+	FromWhere    string  `json:"consumeFromWhere"`
+	Subscription []*Data `json:"subscriptionDataSet"`
+	UnitMode     bool    `json:"unitMode"`
+}
+
+// Data subscription information
+type Data struct {
+	Topic   string   `json:"topic"`
+	Expr    string   `json:"subString"`
+	Typ     string   `json:"expressionType"`
+	Tags    []string `json:"tagsSet"`
+	Codes   []uint32 `json:"codeSet"`
+	Version int64    `json:"subVersion"`
+}
+
+func (c *Consumer) String() string {
+	return fmt.Sprintf("ConsumerData [groupName="+c.Group+
+		", consumeType="+c.Type+
+		", messageModel="+c.Model+
+		", consumeFromWhere="+c.FromWhere+
+		", unitMode=%t"+
+		", subscriptionDataSet=%v]", c.UnitMode, c.Subscription)
 }
 
 // SendHeartbeat send the heartbeat to the broker
-func (r *RPC) SendHeartbeat(addr string, heartbeat *client.HeartbeatRequest, to time.Duration) (
-	version int64, err error,
+func SendHeartbeat(client remote.Client, addr string, heartbeat *HeartbeatRequest, to time.Duration) (
+	version int16, err error,
 ) {
 	data, err := json.Marshal(heartbeat)
 	if err != nil {
 		return
 	}
 
-	cmd, err := r.client.RequestSync(
-		addr, NewCommandWithBody(HeartBeat, nil, data), to,
-	)
+	cmd, err := client.RequestSync(addr, remote.NewCommandWithBody(HeartBeat, nil, data), to)
 	if err != nil {
 		return
 	}
 
 	if cmd.Code != Success {
-		err = brokerError(cmd)
+		err = remote.BrokerError(cmd)
 	}
 
 	version = cmd.Version
@@ -256,7 +306,9 @@ func (uh *unregisterClientHeader) ToMap() map[string]string {
 }
 
 // UnregisterClient unregister the producer/consumer group from broker
-func (r *RPC) UnregisterClient(addr, clientID, pGroup, cGroup string, to time.Duration) (
+func UnregisterClient(
+	client remote.Client, addr, clientID, pGroup, cGroup string, to time.Duration,
+) (
 	err error,
 ) {
 	h := &unregisterClientHeader{
@@ -264,9 +316,9 @@ func (r *RPC) UnregisterClient(addr, clientID, pGroup, cGroup string, to time.Du
 		producerGroup: pGroup,
 		consumerGroup: cGroup,
 	}
-	cmd, err := r.client.RequestSync(addr, remote.NewCommand(UnregisterClient, h), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(UnregisterClientCode, h), to)
 	if err != nil {
-		return
+		return remote.RequestError(err)
 	}
 
 	if cmd.Code != Success {

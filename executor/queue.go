@@ -45,8 +45,8 @@ func (lq *linkedBlockingQueue) Put(r Runnable) error {
 	n.prev, n.next = lq.q.prev, &lq.q
 	lq.q.prev.next, lq.q.prev = n, n
 	lq.size++
-	lq.notEmpty.L.Unlock()
 	lq.notEmpty.Signal()
+	lq.notEmpty.L.Unlock()
 
 	return nil
 }

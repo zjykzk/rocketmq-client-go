@@ -12,6 +12,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
+	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -51,7 +52,7 @@ type mockRPC struct {
 	createTopicErrorCount int
 }
 
-func (r *mockRPC) CreateOrUpdateTopic(addr string, header *remote.CreateOrUpdateTopicHeader, to time.Duration) error {
+func (r *mockRPC) CreateOrUpdateTopic(addr string, header *rpc.CreateOrUpdateTopicHeader, to time.Duration) error {
 	if r.createTopicErrorCount == 0 {
 		return nil
 	}

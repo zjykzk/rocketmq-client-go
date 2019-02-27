@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -41,48 +40,43 @@ type GoroutinePoolExecutor struct {
 	ready        []*workerChan
 	pendingCount sync.WaitGroup
 
-	wg          sync.WaitGroup
-	stopCh      chan struct{}
-	maxIdleTime time.Duration
+	wg                    sync.WaitGroup
+	stopCh                chan struct{}
+	maxIdleWorkerDuration time.Duration
 }
 
 var workerChanCap = func() int {
 	// Use blocking workerChan if GOMAXPROCS=1.
-	// This immediately switches Serve to WorkerFunc, which results
-	// in higher performance (under go1.5 at least).
 	if runtime.GOMAXPROCS(0) == 1 {
 		return 0
 	}
 
-	// Use non-blocking workerChan if GOMAXPROCS>1,
-	// since otherwise the Serve caller (Acceptor) may lag accepting
-	// new connections if WorkerFunc is CPU-bound.
+	// Use non-blocking workerChan if GOMAXPROCS>1
 	return 1
 }()
 
 // NewPoolExecutor creates GoroutinePoolExecutor
 func NewPoolExecutor(
-	name string,
-	corePoolSize, maxPoolSize int32,
-	keepLiveTime time.Duration,
-	queue BlockQueue,
-) (*GoroutinePoolExecutor, error) {
-	if corePoolSize > maxPoolSize {
-		return nil, errors.New("corePoolSize bigger maximumPoolSize")
+	name string, corePoolSize, maxPoolSize int32, maxIdleWorkerDuration time.Duration, queue BlockQueue,
+) (
+	*GoroutinePoolExecutor, error,
+) {
+	if corePoolSize > maxPoolSize || corePoolSize <= 0 {
+		return nil, errBadCoreAndMaxLimit
 	}
 
 	if queue == nil {
-		return nil, errors.New("empgy queue")
+		return nil, errEmptyQueue
 	}
 
 	ex := &GoroutinePoolExecutor{
-		name:         name,
-		corePoolSize: corePoolSize,
-		maxPoolSize:  maxPoolSize,
-		maxIdleTime:  keepLiveTime,
-		queue:        queue,
-		ready:        make([]*workerChan, 0, 32),
-		stopCh:       make(chan struct{}),
+		name:                  name,
+		corePoolSize:          corePoolSize,
+		maxPoolSize:           maxPoolSize,
+		maxIdleWorkerDuration: maxIdleWorkerDuration,
+		queue:                 queue,
+		ready:                 make([]*workerChan, 0, 32),
+		stopCh:                make(chan struct{}),
 		workerChanPool: sync.Pool{
 			New: func() interface{} {
 				return &workerChan{ch: make(chan Runnable, workerChanCap)}
@@ -101,10 +95,12 @@ func (e *GoroutinePoolExecutor) start() {
 	e.setState(running)
 	e.wgWrap(func() {
 		idleWorkers := make([]*workerChan, 0, 128)
+		ticker := time.NewTicker(e.maxIdleWorkerDuration / 2)
 		select {
 		case <-e.stopCh:
+			ticker.Stop()
 			return
-		default:
+		case <-ticker.C:
 			e.cleanIdle(&idleWorkers)
 		}
 	})
@@ -117,10 +113,11 @@ func (e *GoroutinePoolExecutor) start() {
 
 func (e *GoroutinePoolExecutor) cleanIdle(idleWorkers *[]*workerChan) {
 	now := time.Now()
+
 	e.locker.Lock()
 	ready := e.ready
-	n, l, maxIdleTime := 0, len(ready), e.maxIdleTime
-	for n < l && now.Sub(e.ready[n].lastUseTime) > maxIdleTime {
+	n, l, maxIdleDuration := 0, len(ready), e.maxIdleWorkerDuration
+	for n < l && now.Sub(e.ready[n].lastUseTime) > maxIdleDuration {
 		n++
 	}
 
@@ -172,25 +169,37 @@ func (e *GoroutinePoolExecutor) Execute(r Runnable) error {
 		return errNotRunning
 	}
 
-	createWorker := false
-	workerCount := int32(e.workerCountOf())
-	switch {
-	case workerCount < e.corePoolSize:
-		createWorker = true
-	case workerCount < e.maxPoolSize && e.queue.IsFull():
-		createWorker = true
-	}
-
-	if !createWorker {
-		if e.queue.IsFull() {
-			return errQueueIsFull
-		}
-
-		e.pendingCount.Add(1)
-		e.queue.Put(r)
+	if e.canCreateWorker() {
+		e.submitToWorker(r)
 		return nil
 	}
 
+	return e.appendToTheQueue(r)
+}
+
+func (e *GoroutinePoolExecutor) canCreateWorker() bool {
+	workerCount := int32(e.workerCountOf())
+	if workerCount < e.corePoolSize { // below corePoolSize
+		return true
+	}
+
+	if workerCount < e.maxPoolSize && e.queue.IsFull() { // over corePoolSize and queue if full
+		return true
+	}
+	return false
+}
+
+func (e *GoroutinePoolExecutor) appendToTheQueue(r Runnable) error {
+	if e.queue.IsFull() {
+		return errQueueIsFull
+	}
+
+	e.pendingCount.Add(1)
+	e.queue.Put(r)
+	return nil
+}
+
+func (e *GoroutinePoolExecutor) submitToWorker(r Runnable) {
 	e.pendingCount.Add(1)
 	w, isNew := e.getWorkerCh()
 	w.ch <- r
@@ -201,8 +210,6 @@ func (e *GoroutinePoolExecutor) Execute(r Runnable) error {
 			e.workerChanPool.Put(w)
 		})
 	}
-
-	return nil
 }
 
 func (e *GoroutinePoolExecutor) getWorkerCh() (w *workerChan, isNew bool) {
@@ -322,11 +329,8 @@ func (e *GoroutinePoolExecutor) wgWrap(f func()) {
 }
 
 func (e *GoroutinePoolExecutor) String() string {
-	e.locker.RLock()
-	l := len(e.ready)
-	e.locker.RUnlock()
 	return fmt.Sprintf(
-		"GoroutinePoolExecutor:[name=%s,workerCount=%d, idleWorker=%d,corePoolSize=%d, maxPoolSize=%d,queue size=%d,queue is full=%t]",
-		e.name, e.workerCountOf(), l, e.corePoolSize, e.maxPoolSize, e.queue.Size(), e.queue.IsFull(),
+		"GoroutinePoolExecutor:[name=%s,workerCount=%d,idleWorker=%d,corePoolSize=%d,maxPoolSize=%d,queue size=%d,queue is full=%t]",
+		e.name, e.workerCountOf(), e.ReadyCount(), e.corePoolSize, e.maxPoolSize, e.queue.Size(), e.queue.IsFull(),
 	)
 }

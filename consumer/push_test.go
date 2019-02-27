@@ -250,7 +250,7 @@ func TestComputeFromLastOffset(t *testing.T) {
 
 	// retry topic
 	q.Topic = rocketmq.RetryGroupTopicPrefix + "t"
-	offset, err = pc.computeFromLastOffset(q)
+	offset, err = pc.computeWhereToPull(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(0), offset)
 }

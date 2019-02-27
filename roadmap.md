@@ -3,7 +3,9 @@
 - [x] processtable of pulling
 - [x] pull message service
 - [x] consume message
-- [ ] consume message
+- [ ] clear rpc interface
+- [ ] fault strategy with time.Duration
+- [ ] add std log
 - [ ] consumer stats manager
 - [ ] vip request
 - [ ] producer body size limit

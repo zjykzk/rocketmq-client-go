@@ -111,7 +111,7 @@ type brokerVersionTable struct {
 	table map[string]map[string]int32 // brokerName->[broker address->version]
 }
 
-func (v *brokerVersionTable) put(name, addr string, version int16) {
+func (v *brokerVersionTable) put(name, addr string, version int32) {
 	v.Lock()
 	vs, ok := v.table[name]
 	if !ok {

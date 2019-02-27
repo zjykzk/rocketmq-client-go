@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 type mockConcurrentlyConsumer struct {
 	consumeCount int32
+	wg           sync.WaitGroup
 	ret          ConsumeConcurrentlyStatus
 }
 
@@ -20,6 +22,7 @@ func (m *mockConcurrentlyConsumer) Consume(
 	msgs []*message.MessageExt, ctx *ConcurrentlyContext,
 ) ConsumeConcurrentlyStatus {
 	atomic.AddInt32(&m.consumeCount, int32(len(msgs)))
+	m.wg.Done()
 	return m.ret
 }
 
@@ -136,6 +139,8 @@ func TestStartShutdown(t *testing.T) {
 	msgs = append(msgs, m)
 	pq.putMessages(msgs)
 
+	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
+	mockConsumer.wg.Add(1)
 	// to be consumed message
 	cs.submitConsumeRequest([]*message.MessageExt{{QueueOffset: 20}}, pq, &message.Queue{QueueID: 1})
 
@@ -144,7 +149,7 @@ func TestStartShutdown(t *testing.T) {
 	defer cs.shutdown()
 
 	assert.Equal(t, 1, len(cs.messageSendBack.(*mockSendback).msgs))
-	assert.Equal(t, int32(1), cs.consumer.(*mockConcurrentlyConsumer).consumeCount)
+	assert.Equal(t, int32(1), mockConsumer.consumeCount)
 }
 
 func TestSubmitRequestSuccess(t *testing.T) {
@@ -154,13 +159,16 @@ func TestSubmitRequestSuccess(t *testing.T) {
 	defer cs.shutdown()
 
 	count := 2000
+	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
+	mockConsumer.wg.Add(count)
+
 	msgs := []*message.MessageExt{&message.MessageExt{}}
 	for i := 0; i < count; i++ {
 		go func() { cs.submitConsumeRequest(msgs, newProcessQueue(), nil) }()
 	}
 
-	for int(atomic.LoadInt32(&cs.consumer.(*mockConcurrentlyConsumer).consumeCount)) != count {
-	}
+	mockConsumer.wg.Wait()
+	assert.Equal(t, int32(count), mockConsumer.consumeCount)
 }
 
 func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
@@ -384,12 +392,13 @@ func TestConcurrentlyProcessqueue(t *testing.T) {
 }
 
 func TestConcurrentSubmitLater(t *testing.T) {
-	// TODO contains bugs
 	cs := newTestConcurrentlyService(t)
 	cs.start()
-	defer cs.shutdown()
 
 	count := 2000
+	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
+	mockConsumer.wg.Add(count)
+
 	msgs := []*message.MessageExt{&message.MessageExt{}}
 	for i := 0; i < count; i++ {
 		go func() {
@@ -401,8 +410,10 @@ func TestConcurrentSubmitLater(t *testing.T) {
 		}()
 	}
 
-	for int(atomic.LoadInt32(&cs.consumer.(*mockConcurrentlyConsumer).consumeCount)) != count {
-	}
+	mockConsumer.wg.Wait()
+	assert.Equal(t, int32(count), mockConsumer.consumeCount)
+
+	cs.shutdown()
 }
 
 func TestGetConsumingMessageQueue(t *testing.T) {

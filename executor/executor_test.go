@@ -59,9 +59,9 @@ func TestWorkerCount(t *testing.T) {
 
 func TestMaxIdleTime(t *testing.T) {
 	e := &GoroutinePoolExecutor{
-		corePoolSize: 2,
-		maxPoolSize:  4,
-		maxIdleTime:  time.Millisecond * 10,
+		corePoolSize:          2,
+		maxPoolSize:           4,
+		maxIdleWorkerDuration: time.Millisecond * 10,
 	}
 
 	now := time.Now()
@@ -85,7 +85,7 @@ func TestState(t *testing.T) {
 }
 
 func TestShutdown(t *testing.T) {
-	e, _ := NewPoolExecutor("shutdown", 6, 6, time.Hour, NewLinkedBlockingQueue())
+	e, _ := NewPoolExecutor("shutdown", 6, 6, time.Millisecond, NewLinkedBlockingQueue())
 	assert.Equal(t, 0, e.workerCountOf())
 	c := &ncounter{}
 	taskCount := 10000
@@ -102,4 +102,24 @@ func TestShutdown(t *testing.T) {
 	assert.Equal(t, stop, e.state())
 	assert.Equal(t, 0, e.queue.Size())
 	assert.Equal(t, taskCount, int(c.count))
+}
+
+func TestExecute(t *testing.T) {
+	e, _ := NewPoolExecutor("TestExecute", 6, 6, time.Hour, NewLinkedBlockingQueue())
+	assert.Equal(t, 0, e.workerCountOf())
+
+	assert.Equal(t, errBadRunnable, e.Execute(nil))
+	e.Shutdown()
+
+	assert.Equal(t, errNotRunning, e.Execute(&ncounter{}))
+
+	t.Log(e)
+}
+
+func TestNew(t *testing.T) {
+	_, err := NewPoolExecutor("TestNew", 7, 6, time.Hour, NewLinkedBlockingQueue())
+	assert.Equal(t, errBadCoreAndMaxLimit, err)
+
+	_, err = NewPoolExecutor("TestNew", 6, 6, time.Hour, nil)
+	assert.Equal(t, errEmptyQueue, err)
 }

@@ -1,7 +1,6 @@
 package remote
 
 import (
-	"errors"
 	"sync"
 	"time"
 
@@ -36,9 +35,6 @@ type client struct {
 
 	logger log.Logger
 }
-
-// ErrBadNamesrvAddrs bad name server address
-var ErrBadNamesrvAddrs = errors.New("bad name server address")
 
 // ClientConfig timeout configuration
 type ClientConfig struct {

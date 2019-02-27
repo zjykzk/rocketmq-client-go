@@ -13,7 +13,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote"
+	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -75,7 +75,7 @@ type consumer struct {
 	assigner        queueAssigner
 	offseter        offseter
 	startTime       time.Time
-	rpc             rpc
+	rpc             rpcI
 
 	runnerInfo func() client.RunningInfo
 
@@ -136,7 +136,7 @@ func (c *consumer) start() (err error) {
 		return
 	}
 
-	c.rpc = remote.NewRPC(c.client.RemotingClient())
+	c.rpc = rpc.NewRPC(c.client.RemotingClient())
 	c.startTime = time.Now()
 	c.exitChan = make(chan struct{})
 	c.schedule(time.Second, c.ReblanceInterval, c.ReblanceQueue)
@@ -312,7 +312,16 @@ func (c *consumer) QueryConsumerOffset(q *message.Queue) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("cannot find broker address:%s %s, error:%s", q.BrokerName, q.Topic, err)
 	}
-	return c.rpc.QueryConsumerOffset(addr, q.Topic, c.Group(), int(q.QueueID), time.Second*5)
+	offset, rpcErr := c.rpc.QueryConsumerOffset(addr, q.Topic, c.Group(), int(q.QueueID), time.Second*5)
+	if rpcErr == nil {
+		return offset, nil
+	}
+
+	if rpcErr.Code == rpc.QueryNotFound {
+		return 0, errOffsetNotExist
+	}
+
+	return offset, rpcErr
 }
 
 func (c *consumer) QueryMaxOffset(q *message.Queue) (int64, error) {
@@ -320,7 +329,12 @@ func (c *consumer) QueryMaxOffset(q *message.Queue) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("cannot find broker address:%s %s, error:%s", q.BrokerName, q.Topic, err)
 	}
-	return c.rpc.MaxOffset(addr, q.Topic, q.QueueID, time.Second*5)
+	offset, rpcErr := c.rpc.MaxOffset(addr, q.Topic, q.QueueID, time.Second*5)
+	if rpcErr == nil {
+		return offset, nil
+	}
+
+	return 0, rpcErr
 }
 
 func (c *consumer) UpdateOffset(q *message.Queue, offset int64, oneway bool) error {

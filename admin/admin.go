@@ -12,7 +12,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote"
+	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -20,7 +20,7 @@ import (
 type Admin struct {
 	rocketmq.Client
 	state    rocketmq.State
-	rpc      rpc
+	rpc      rpcI
 	exitChan chan int
 
 	client client.MQClient
@@ -90,7 +90,7 @@ func (a *Admin) Start() (err error) {
 	if err == nil {
 		a.state = rocketmq.StateRunning
 	}
-	a.rpc = remote.NewRPC(a.client.RemotingClient())
+	a.rpc = rpc.NewRPC(a.client.RemotingClient())
 	return
 }
 
@@ -116,7 +116,7 @@ func (a *Admin) Group() string {
 
 // CreateOrUpdateTopic create a new topic
 func (a *Admin) CreateOrUpdateTopic(addr, topic string, perm, queueCount int32) error {
-	header := &remote.CreateOrUpdateTopicHeader{
+	header := &rpc.CreateOrUpdateTopicHeader{
 		Topic:           topic,
 		ReadQueueNums:   queueCount,
 		WriteQueueNums:  queueCount,

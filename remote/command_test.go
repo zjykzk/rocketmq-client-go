@@ -27,7 +27,7 @@ func TestCommand(t *testing.T) {
 		S: "ssssss",
 	}
 	t.Run("no body", func(t *testing.T) {
-		cmd := NewCommand(UpdateAndCreateTopic, h)
+		cmd := NewCommand(0, h)
 		assert.Equal(t, 2, len(cmd.ExtFields))
 		bs, err := encode(cmd)
 		if err != nil {
@@ -77,7 +77,7 @@ func TestCommand(t *testing.T) {
 	})
 
 	t.Run("body", func(t *testing.T) {
-		cmd := NewCommandWithBody(UpdateAndCreateTopic, h, []byte("body"))
+		cmd := NewCommandWithBody(0, h, []byte("body"))
 		bs, err := encode(cmd)
 		if err != nil {
 			t.Fatal(err)

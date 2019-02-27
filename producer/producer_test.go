@@ -12,6 +12,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
+	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -49,171 +50,177 @@ func TestSendHeader(t *testing.T) {
 	assert.Equal(t, "", m.Properties[message.PropertyMaxReconsumeTimes])
 }
 
+type mockRemoteClient struct {
+	*remote.MockClient
+
+	requestSyncErr error
+	command        remote.Command
+}
+
+func (m *mockRemoteClient) RequestSync(
+	addr string, cmd *remote.Command, timeout time.Duration,
+) (
+	*remote.Command, error,
+) {
+	return &m.command, m.requestSyncErr
+}
+
 type mockMQClient struct {
 	*client.EmptyMQClient
-	mqClient         client.MQClient
+	mqClient mockRemoteClient
+
 	brokerAddr       map[string]string
 	p                *Producer
 	updateTopicCount int
+
+	updateTopicRouterInfoFromNamesrvErr error
+	topicRouter                         *route.TopicRouter
 }
+
+func (c *mockMQClient) RemotingClient() remote.Client { return &c.mqClient }
 
 func (c *mockMQClient) GetMasterBrokerAddr(broker string) string {
 	return c.brokerAddr[broker]
 }
 
 func (c *mockMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
-	switch c.updateTopicCount++; c.updateTopicCount {
-	case 1:
-		return errors.New("mock update topic error")
-	case 2:
-		return nil
-	default:
-		c.p.UpdateTopicPublish(topic, &route.TopicRouter{
-			Queues: []*route.TopicQueue{
-				&route.TopicQueue{
-					BrokerName: "b",
-					ReadCount:  2,
-					WriteCount: 2,
-					Perm:       route.PermWrite | route.PermWrite,
-					SyncFlag:   2,
-				},
-				&route.TopicQueue{
-					BrokerName: "b1",
-					ReadCount:  2,
-					WriteCount: 2,
-					Perm:       route.PermWrite | route.PermWrite,
-					SyncFlag:   2,
-				},
-				&route.TopicQueue{
-					BrokerName: "b2",
-					ReadCount:  2,
-					WriteCount: 2,
-					Perm:       route.PermWrite | route.PermWrite,
-					SyncFlag:   2,
-				},
-			},
-			Brokers: []*route.Broker{
-				&route.Broker{
-					Cluster:   "c",
-					Name:      "b",
-					Addresses: map[int32]string{0: "a"},
-				},
-				&route.Broker{
-					Cluster:   "c",
-					Name:      "b1",
-					Addresses: map[int32]string{0: "a"},
-				},
-				&route.Broker{
-					Cluster:   "c",
-					Name:      "b2",
-					Addresses: map[int32]string{0: "a"},
-				},
-			},
-		})
-		return nil
-	}
-}
-
-type mockRPC struct {
-	sendCount int
-}
-
-func (r *mockRPC) SendMessageSync(
-	addr string, body []byte, h *remote.SendHeader, to time.Duration,
-) (
-	*remote.SendResponse, error,
-) {
-	resp := &remote.SendResponse{
-		MsgID:         "msgID",
-		QueueOffset:   111,
-		QueueID:       222,
-		RegionID:      "RegionID",
-		TraceOn:       true,
-		TransactionID: "TransactionID",
-	}
-	switch r.sendCount++; r.sendCount {
-	case 1:
-		return nil, errors.New("mock send error")
-	case 2:
-		resp.Code = remote.Success
-	case 3:
-		resp.Code = remote.FlushDiskTimeout
-	case 4:
-		resp.Code = remote.FlushSlaveTimeout
-	case 5:
-		resp.Code = remote.SlaveNotAvailable
-	default:
-		resp.Code = remote.SystemError
-		resp.Message = "mock system error"
-	}
-	return resp, nil
+	return c.updateTopicRouterInfoFromNamesrvErr
 }
 
 func TestSendSync0(t *testing.T) {
 	p := NewProducer("sendHeader", []string{"abc"}, &log.MockLogger{})
-	p.client = &mockMQClient{brokerAddr: map[string]string{"ok": "ok"}}
-	p.rpc = &mockRPC{}
+	mockMQClient := &mockMQClient{brokerAddr: map[string]string{"ok": "ok"}}
+	mockRemoteClient := &mockMQClient.mqClient
+	p.client = mockMQClient
 
+	// no broker
 	sr, err := p.sendSync(&message.Message{}, &message.Queue{BrokerName: "not exist"}, 123)
 	assert.NotNil(t, err)
 	assert.Equal(t, "cannot find broker", err.Error())
 
+	// bad send
+	mockRemoteClient.requestSyncErr = errors.New("bad request")
 	sr, err = p.sendSync(&message.Message{}, &message.Queue{BrokerName: "ok"}, 123)
 	assert.NotNil(t, err)
-	assert.Equal(t, "mock send error", err.Error())
+	assert.Equal(t, remote.RequestError(mockRemoteClient.requestSyncErr), err)
+	mockRemoteClient.requestSyncErr = nil
+
+	// ok
 	q := &message.Queue{BrokerName: "ok"}
+	mockRemoteClient.command.ExtFields = map[string]string{
+		"msgId":       "1",
+		"queueOffset": "111",
+		"MSG_REGION":  "RegionID",
+		"TRACE_ON":    "true",
+		"queueId":     "3",
+	}
 	sr, err = p.sendSync(&message.Message{}, q, 123)
 	assert.Nil(t, err)
 	assert.Equal(t, OK, sr.Status)
-	assert.Equal(t, "msgID", sr.OffsetID)
+	assert.Equal(t, "1", sr.OffsetID)
 	assert.Equal(t, int64(111), sr.QueueOffset)
 	assert.Equal(t, *q, *sr.Queue)
 	assert.Equal(t, "RegionID", sr.RegionID)
-	assert.Equal(t, "TransactionID", sr.TransactionID)
 	assert.True(t, sr.TraceOn)
 
+	// disk timeout
+	mockRemoteClient.command.Code = rpc.FlushDiskTimeout
 	sr, err = p.sendSync(&message.Message{}, &message.Queue{BrokerName: "ok"}, 123)
 	assert.Nil(t, err)
 	assert.Equal(t, FlushDiskTimeout, sr.Status)
+
+	// slave timeout
+	mockRemoteClient.command.Code = rpc.FlushSlaveTimeout
 	sr, err = p.sendSync(&message.Message{}, &message.Queue{BrokerName: "ok"}, 123)
 	assert.Nil(t, err)
 	assert.Equal(t, FlushSlaveTimeout, sr.Status)
+
+	// slave not available
+	mockRemoteClient.command.Code = rpc.SlaveNotAvailable
 	sr, err = p.sendSync(&message.Message{}, &message.Queue{BrokerName: "ok"}, 123)
 	assert.Nil(t, err)
 	assert.Equal(t, SlaveNotAvailable, sr.Status)
-	sr, err = p.sendSync(&message.Message{}, &message.Queue{BrokerName: "ok"}, 123)
-	assert.NotNil(t, err)
 }
 
 func TestSendSync(t *testing.T) {
 	p := NewProducer("sendSync", []string{"abc"}, &log.MockLogger{})
 	p.Start()
-	mc := &mockMQClient{brokerAddr: map[string]string{"b1": "ok", "b2": "b2"}, mqClient: p.client, p: p}
+	mc := &mockMQClient{brokerAddr: map[string]string{"b1": "ok", "b2": "b2"}, p: p}
 	p.client = mc
-	p.rpc = &mockRPC{}
 
 	defer func() {
 		p.Shutdown()
-		mc.mqClient.UnregisterProducer(p.GroupName)
-		mc.mqClient.Shutdown()
 	}()
 
-	m := &message.Message{
-		Topic: "test send sync topic",
-		Body:  []byte("test send sync topic body"),
+	// empty message
+	sr, err := p.SendSync(nil)
+	assert.Equal(t, errEmptyMessage, err)
+
+	m := &message.Message{}
+
+	// empty body
+	sr, err = p.SendSync(m)
+	assert.Equal(t, errEmptyBody, err)
+	m.Body = []byte("test send sync topic body")
+
+	// empty topic
+	sr, err = p.SendSync(m)
+	assert.Equal(t, errEmptyTopic, err)
+	m.Topic = "test send sync topic"
+
+	// update topic router error
+	mc.updateTopicRouterInfoFromNamesrvErr = errors.New("bad update topic router")
+	sr, err = p.SendSync(m)
+	assert.Equal(t, mc.updateTopicRouterInfoFromNamesrvErr, err)
+	mc.updateTopicRouterInfoFromNamesrvErr = nil
+
+	// no routers
+	sr, err = p.SendSync(m)
+	assert.Equal(t, errNoRouters, err)
+
+	// ok
+	mc.p.UpdateTopicPublish(m.Topic, &route.TopicRouter{
+		Queues: []*route.TopicQueue{
+			&route.TopicQueue{
+				BrokerName: "b",
+				ReadCount:  2,
+				WriteCount: 2,
+				Perm:       route.PermWrite | route.PermWrite,
+				SyncFlag:   2,
+			},
+			&route.TopicQueue{
+				BrokerName: "b1",
+				ReadCount:  2,
+				WriteCount: 2,
+				Perm:       route.PermWrite | route.PermWrite,
+				SyncFlag:   2,
+			},
+		},
+		Brokers: []*route.Broker{
+			&route.Broker{
+				Cluster:   "c",
+				Name:      "b",
+				Addresses: map[int32]string{0: "a"},
+			},
+			&route.Broker{
+				Cluster:   "c",
+				Name:      "b1",
+				Addresses: map[int32]string{0: "a"},
+			},
+		},
+	})
+	mc.mqClient.command.ExtFields = map[string]string{
+		"msgId":       "1",
+		"queueOffset": "111",
+		"MSG_REGION":  "RegionID",
+		"TRACE_ON":    "true",
+		"queueId":     "3",
 	}
-
-	sr, err := p.SendSync(m)
-	assert.Equal(t, "mock update topic error", err.Error())
 	sr, err = p.SendSync(m)
-	assert.Equal(t, "no routers", err.Error())
-	sr, err = p.SendSync(m)
-	assert.NotNil(t, err)
-
-	sr, err = p.SendSync(m)
+	assert.Nil(t, err)
 	assert.Equal(t, OK, sr.Status)
 	assert.False(t, p.mqFaultStrategy.Available("b"))
-	assert.False(t, p.mqFaultStrategy.Available("b1"))
+	assert.True(t, p.mqFaultStrategy.Available("b1"))
 }
 
 func TestUpdateTopicRouter(t *testing.T) {

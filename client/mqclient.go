@@ -50,7 +50,6 @@ type mqClient struct {
 	state    rocketmq.State
 
 	remote.Client
-	rpc rpc
 
 	clientID string
 
@@ -115,7 +114,6 @@ func newMQClient(config *Config, clientID string, logger log.Logger) MQClient {
 		WriteTimeout: time.Millisecond * 100,
 		DialTimeout:  time.Second,
 	}, c.processRequest, logger)
-	c.rpc = rpc.NewRPC(c.Client)
 	return c
 }
 
@@ -184,7 +182,9 @@ func (c *mqClient) unregisterClient(producerGroup, consumerGroup string) {
 	c.Lock()
 	for _, name := range c.brokerAddrs.brokerNames() {
 		for _, addr := range c.brokerAddrs.brokerAddrs(name) {
-			err := c.rpc.UnregisterClient(addr.addr, clientID, producerGroup, consumerGroup, timeout)
+			err := rpc.UnregisterClient(
+				c.Client, addr.addr, clientID, producerGroup, consumerGroup, timeout,
+			)
 			c.logger.Infof(
 				"unregister client p:%s c:%s from addr %s, err:%v",
 				producerGroup, consumerGroup, addr.addr, err,
@@ -340,18 +340,20 @@ func (c *mqClient) FindAnyBrokerAddr(brokerName string) (
 	}, nil
 }
 
-func (c *mqClient) getTopicRouteInfo(topic string) (router *route.TopicRouter, err error) {
+func (c *mqClient) getTopicRouteInfo(topic string) (*route.TopicRouter, error) {
+	var err error
 	l := len(c.NameServerAddrs)
 	for i, cc := rand.Intn(l), l; cc > 0; i, cc = i+1, cc-1 {
 		addr := c.NameServerAddrs[i%l]
-		router, err = c.rpc.GetTopicRouteInfo(addr, topic, 3*time.Second)
-		if err == nil {
-			return
+		router, e := rpc.GetTopicRouteInfo(c.Client, addr, topic, 3*time.Second)
+		if e == nil {
+			return router, nil
 		}
 
-		c.logger.Errorf("request broker cluster info from %s, error:%s", addr, err)
+		err = e
+		c.logger.Errorf("request broker cluster info from %s, error:%s", addr, e)
 	}
-	return
+	return nil, err
 }
 
 func (c *mqClient) updateTopicRouterInfoFromNamesrv(topic string) (updated bool, err error) {
@@ -444,7 +446,7 @@ func (c *mqClient) SendHeartbeat() {
 				continue
 			}
 
-			version, err := c.rpc.SendHeartbeat(addr, hr, 3*time.Second)
+			version, err := rpc.SendHeartbeat(c.Client, addr, hr, 3*time.Second)
 			if err != nil {
 				c.logger.Error("send heartbeat to " + addr + " failed, err:" + err.Error())
 				if c.isBrokerAddrInRouter(addr) {
@@ -453,38 +455,47 @@ func (c *mqClient) SendHeartbeat() {
 				continue
 			}
 
-			c.brokerVersions.put(name, addr, version)
+			c.brokerVersions.put(name, addr, int32(version))
 			c.logger.Infof("send heartbeat to broker[%d %s %s], data:%v", id, name, addr, hr)
 		}
 	}
 }
 
-func (c *mqClient) prepareHeartbeatData() *HeartbeatRequest {
+func (c *mqClient) prepareHeartbeatData() *rpc.HeartbeatRequest {
 	ps := c.producers.coll()
-	producers := make([]Producer, len(ps))
+	producers := make([]rpc.Producer, len(ps))
 	for i := range ps {
 		producers[i].Group = ps[i].Group()
 	}
 
 	cs := c.consumers.coll()
-	consumers := make([]*Consumer, len(cs))
+	consumers := make([]*rpc.Consumer, len(cs))
 	for i := range consumers {
 		c1 := cs[i]
-		consumers[i] = &Consumer{
+
+		consumers[i] = &rpc.Consumer{
 			FromWhere:    c1.ConsumeFromWhere(),
 			Group:        c1.Group(),
 			Model:        c1.Model(),
 			Type:         c1.Type(),
 			UnitMode:     c1.UnitMode(),
-			Subscription: c1.Subscriptions(),
+			Subscription: toRPCSubscriptionDatas(c1.Subscriptions()),
 		}
 	}
 
-	return &HeartbeatRequest{
+	return &rpc.HeartbeatRequest{
 		ClientID:  c.clientID,
 		Producers: producers,
 		Consumers: consumers,
 	}
+}
+
+func toRPCSubscriptionDatas(datas []*Data) []*rpc.Data {
+	subscriptionDatas := make([]*rpc.Data, len(datas))
+	for i, d := range datas {
+		subscriptionDatas[i] = (*rpc.Data)(d)
+	}
+	return subscriptionDatas
 }
 
 func (c *mqClient) cleanOfflineBroker() {
@@ -572,29 +583,29 @@ OUT:
 
 func (c *mqClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
 	switch cmd.Code {
-	case remote.NotifyConsumerIdsChanged:
+	case rpc.NotifyConsumerIdsChanged:
 		for _, co := range c.consumers.coll() {
 			co.ReblanceQueue()
 		}
-	case remote.CheckTransactionState:
-	case remote.ResetConsumerClientOffset:
-	case remote.GetConsumerStatusFromClient:
-	case remote.GetConsumerRunningInfo:
+	case rpc.CheckTransactionState:
+	case rpc.ResetConsumerClientOffset:
+	case rpc.GetConsumerStatusFromClient:
+	case rpc.GetConsumerRunningInfo:
 		group := cmd.ExtFields["consumerGroup"]
 		co := c.consumers.get(group)
 		if co == nil {
 			c.logger.Errorf("no consumer of group:%s", group)
-			cmd.Code = remote.SystemError
+			cmd.Code = rpc.SystemError
 			cmd.Remark = fmt.Sprintf("The Consumer Group <%s> not exist in this consumer", group)
 		} else {
 			info := co.RunningInfo()
 			cmd.Body, _ = json.Marshal(info)
-			cmd.Code = remote.Success
+			cmd.Code = rpc.Success
 			cmd.Remark = ""
 		}
 		cmd, err := c.Client.RequestSync(ctx.Address, cmd, time.Second)
 		c.logger.Debugf("GetConsumerRunningInfo result:%s, err:%v", cmd, err)
-	case remote.ConsumeMessageDirectly:
+	case rpc.ConsumeMessageDirectly:
 	default:
 		return false
 	}

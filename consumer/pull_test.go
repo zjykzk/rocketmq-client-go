@@ -11,6 +11,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
+	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 )
 
 func TestPullConsumer(t *testing.T) {
@@ -78,9 +79,9 @@ func (r *mockConsumerRPC) GetConsumerIDs(addr, group string, to time.Duration) (
 	return r.clientIDs, r.getConsumerIDsErr
 }
 func (r *mockConsumerRPC) PullMessageSync(
-	addr string, header *remote.PullHeader, to time.Duration,
-) (*remote.PullResponse, error) {
-	pr := &remote.PullResponse{
+	addr string, header *rpc.PullHeader, to time.Duration,
+) (*rpc.PullResponse, error) {
+	pr := &rpc.PullResponse{
 		NextBeginOffset: 2,
 		MinOffset:       1,
 		MaxOffset:       3,
@@ -98,17 +99,17 @@ func (r *mockConsumerRPC) PullMessageSync(
 	case 1:
 		return nil, errors.New("mock pull error")
 	case 2:
-		pr.Code = remote.Success
+		pr.Code = rpc.Success
 	case 3:
-		pr.Code = remote.PullNotFound
+		pr.Code = rpc.PullNotFound
 	case 4:
-		pr.Code = remote.PullRetryImmediately
+		pr.Code = rpc.PullRetryImmediately
 	case 5:
-		pr.Code = remote.PullOffsetMoved
+		pr.Code = rpc.PullOffsetMoved
 	}
 	return pr, nil
 }
-func (r *mockConsumerRPC) SendBack(addr string, h *remote.SendBackHeader, to time.Duration) error {
+func (r *mockConsumerRPC) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) error {
 	r.sendBackAddr = addr
 	return nil
 }
@@ -128,7 +129,7 @@ func (r *mockConsumerRPC) UpdateConsumerOffsetOneway(
 func (r *mockConsumerRPC) QueryConsumerOffset(
 	addr, topic, group string, queueID int, to time.Duration,
 ) (
-	int64, error,
+	int64, *remote.RPCError,
 ) {
 	return 0, nil
 }

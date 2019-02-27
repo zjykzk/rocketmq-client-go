@@ -43,7 +43,7 @@ func brokerError(cmd *Command) error {
 }
 
 // BrokerError new error which represents error returned by the broker
-func BrokerError(cmd *Command) error {
+func BrokerError(cmd *Command) *RPCError {
 	return &RPCError{Code: cmd.Code, Message: cmd.Remark}
 }
 

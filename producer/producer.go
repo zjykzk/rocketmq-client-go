@@ -12,7 +12,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote"
+	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -52,7 +52,6 @@ type Producer struct {
 	rocketmq.Server
 	topicPublishInfos topicPublishInfoTable
 	client            client.MQClient
-	rpc               rpc
 	mqFaultStrategy   *MQFaultStrategy
 
 	Logger log.Logger
@@ -104,7 +103,6 @@ func (p *Producer) start() (err error) {
 	}
 
 	err = p.client.Start()
-	p.rpc = remote.NewRPC(p.client.RemotingClient())
 	p.mqFaultStrategy = NewMQFaultStrategy(true)
 	return
 }
@@ -188,8 +186,34 @@ func (p *Producer) NeedUpdateTopicPublish(topic string) bool {
 // SendSync sends the message
 // the message must not be nil
 func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err error) {
-	// NOTE: IGNORE the checking topic and body, since the outer layer has done it
-	topic := m.Topic
+	if m == nil {
+		return nil, errEmptyMessage
+	}
+
+	if len(m.Body) == 0 {
+		return nil, errEmptyBody
+	}
+
+	if m.Topic == "" {
+		return nil, errEmptyTopic
+	}
+
+	pi, err := p.getRouters(m.Topic)
+	if err != nil {
+		return nil, err
+	}
+
+	m.SetUniqID(message.CreateUniqID())
+
+	sysFlag := int32(0)
+	if p.tryToCompress(m) {
+		sysFlag |= message.Compress
+	}
+
+	return p.sendMessageWithFault(pi, m, sysFlag)
+}
+
+func (p *Producer) getRouters(topic string) (*topicPublishInfo, error) {
 	pi := p.topicPublishInfos.get(topic)
 	if pi == nil { // publish the topic
 		pi = &topicPublishInfo{}
@@ -197,36 +221,37 @@ func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err err
 	}
 
 	if !pi.hasQueue() {
-		err = p.client.UpdateTopicRouterInfoFromNamesrv(topic)
+		err := p.client.UpdateTopicRouterInfoFromNamesrv(topic)
 		if err != nil {
 			p.Logger.Errorf("update topic router from namesrv error:%s", err)
-			return
+			return nil, err
 		}
 		pi = p.topicPublishInfos.get(topic)
 	}
 
 	if !pi.hasQueue() {
-		return nil, errors.New("no routers")
+		return nil, errNoRouters
 	}
 
-	m.SetUniqID(message.CreateUniqID())
-	prevBody := m.Body
+	return pi, nil
+}
 
-	sysFlag := int32(0)
-	if p.tryToCompress(m) {
-		sysFlag |= message.Compress
-	}
-
+func (p *Producer) sendMessageWithFault(
+	router *topicPublishInfo, m *message.Message, sysFlag int32,
+) (
+	sendResult *SendResult, err error,
+) {
 	var (
 		q           *message.Queue
 		brokersSent = make([]string, p.RetryTimesWhenSendFailed+1)
 		retryCount  = int32(1)
+		prevBody    = m.Body
 	)
 
 	startPoint := time.Now()
 	prev := startPoint
 	for maxSendCount := p.RetryTimesWhenSendFailed + 1; retryCount < maxSendCount; retryCount++ {
-		q = p.mqFaultStrategy.SelectOneQueue(pi, brokersSent[retryCount-1])
+		q = p.mqFaultStrategy.SelectOneQueue(router, brokersSent[retryCount-1])
 		sendResult, err = p.sendSync(m, q, sysFlag)
 
 		now := time.Now()
@@ -242,17 +267,17 @@ func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err err
 			)
 			p.Logger.Warn(m.String())
 			continue
-		} else {
-			p.mqFaultStrategy.UpdateFault(q.BrokerName, int64(cost), false)
 		}
 
+		p.mqFaultStrategy.UpdateFault(q.BrokerName, int64(cost), false)
 		goto END
 	}
 
-	p.Logger.Errorf("send %d times, still failed, cost %d, topic:%s, sendBrokers:%v",
-		retryCount-1, time.Now().Sub(startPoint)/time.Millisecond, m.Topic, brokersSent[1:])
+	p.Logger.Errorf("send %d times, still failed, cost %s, topic:%s, sendBrokers:%v",
+		retryCount-1, time.Now().Sub(startPoint), m.Topic, brokersSent[1:])
 END:
 	m.Body = prevBody
+
 	return
 }
 
@@ -265,8 +290,10 @@ func (p *Producer) sendSync(m *message.Message, q *message.Queue, sysFlag int32)
 		return nil, errors.New("cannot find broker")
 	}
 
-	resp, err := p.rpc.SendMessageSync(
-		addr, m.Body, p.buildSendHeader(m, q, sysFlag), p.SendMsgTimeout,
+	println("=============", q.BrokerName, addr)
+
+	resp, err := rpc.SendMessageSync(
+		p.client.RemotingClient(), addr, m.Body, p.buildSendHeader(m, q, sysFlag), p.SendMsgTimeout,
 	)
 	if err != nil {
 		p.Logger.Errorf("request send message %s sync error:%v", m.String(), err)
@@ -275,13 +302,13 @@ func (p *Producer) sendSync(m *message.Message, q *message.Queue, sysFlag int32)
 
 	var sendResult *SendResult
 	switch resp.Code {
-	case remote.FlushDiskTimeout:
+	case rpc.FlushDiskTimeout:
 		sendResult = &SendResult{Status: FlushDiskTimeout}
-	case remote.FlushSlaveTimeout:
+	case rpc.FlushSlaveTimeout:
 		sendResult = &SendResult{Status: FlushSlaveTimeout}
-	case remote.SlaveNotAvailable:
+	case rpc.SlaveNotAvailable:
 		sendResult = &SendResult{Status: SlaveNotAvailable}
-	case remote.Success:
+	case rpc.Success:
 		sendResult = &SendResult{Status: OK}
 	default:
 		p.Logger.Errorf("broker reponse code:%d, error:%s", resp.Code, resp.Message)
@@ -300,9 +327,9 @@ func (p *Producer) sendSync(m *message.Message, q *message.Queue, sysFlag int32)
 }
 
 func (p *Producer) buildSendHeader(m *message.Message, q *message.Queue, sysFlag int32) (
-	header *remote.SendHeader,
+	header *rpc.SendHeader,
 ) {
-	header = &remote.SendHeader{
+	header = &rpc.SendHeader{
 		Group:                 p.GroupName,
 		Topic:                 m.Topic,
 		DefaultTopic:          p.CreateTopicKey,

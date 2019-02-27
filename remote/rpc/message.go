@@ -6,6 +6,7 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/message"
+	"github.com/zjykzk/rocketmq-client-go/remote"
 )
 
 // SendHeader send request header
@@ -46,9 +47,10 @@ func (h *SendHeader) ToMap() map[string]string {
 
 // SendResponse send response
 type SendResponse struct {
-	Code          Code
-	Message       string
-	Version       int16
+	Code    remote.Code
+	Message string
+	Version int16
+
 	MsgID         string
 	QueueOffset   int64
 	QueueID       int32
@@ -58,12 +60,14 @@ type SendResponse struct {
 }
 
 // SendMessageSync sends message
-func (r *RPC) SendMessageSync(addr string, d []byte, header *SendHeader, to time.Duration) (
+func SendMessageSync(
+	client remote.Client, addr string, d []byte, header *SendHeader, to time.Duration,
+) (
 	*SendResponse, error,
 ) {
-	cmd, err := r.client.RequestSync(addr, NewCommandWithBody(SendMessage, header, d), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommandWithBody(SendMessage, header, d), to)
 	if err != nil {
-		return nil, err
+		return nil, remote.RequestError(err)
 	}
 
 	resp := &SendResponse{Code: cmd.Code, Message: cmd.Remark}
@@ -78,13 +82,13 @@ func (r *RPC) SendMessageSync(addr string, d []byte, header *SendHeader, to time
 	resp.MsgID = cmd.ExtFields["msgId"]
 	queueID, err := strconv.ParseInt(cmd.ExtFields["queueId"], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, remote.DataError(err)
 	}
 	resp.QueueID = int32(queueID)
 
 	queueOffset, err := strconv.ParseInt(cmd.ExtFields["queueOffset"], 10, 64)
 	if err != nil {
-		return nil, err
+		return nil, remote.DataError(err)
 	}
 	resp.QueueOffset, resp.RegionID = queueOffset, cmd.ExtFields[message.PropertyMsgRegion]
 
@@ -135,7 +139,7 @@ func (p *PullHeader) ToMap() map[string]string {
 
 // PullResponse pull message response
 type PullResponse struct {
-	Code            Code
+	Code            remote.Code
 	Message         string
 	Version         int16
 	NextBeginOffset int64
@@ -149,7 +153,7 @@ type PullResponse struct {
 func (r *RPC) PullMessageSync(addr string, header *PullHeader, to time.Duration) (
 	pr *PullResponse, err error,
 ) {
-	cmd, err := r.client.RequestSync(addr, NewCommand(PullMessage, header), to)
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(PullMessage, header), to)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +161,7 @@ func (r *RPC) PullMessageSync(addr string, header *PullHeader, to time.Duration)
 	switch cmd.Code {
 	case Success, PullNotFound, PullRetryImmediately, PullOffsetMoved:
 	default:
-		return nil, brokerError(cmd)
+		return nil, remote.BrokerError(cmd)
 	}
 
 	pr = &PullResponse{Code: cmd.Code, Message: cmd.Remark, Version: cmd.Version}
@@ -168,21 +172,28 @@ func (r *RPC) PullMessageSync(addr string, header *PullHeader, to time.Duration)
 
 	pr.NextBeginOffset, err = strconv.ParseInt(cmd.ExtFields["nextBeginOffset"], 10, 64)
 	if err != nil {
+		err = remote.DataError(err)
 		return
 	}
 	pr.MinOffset, err = strconv.ParseInt(cmd.ExtFields["minOffset"], 10, 64)
 	if err != nil {
+		err = remote.DataError(err)
 		return
 	}
 	pr.MaxOffset, err = strconv.ParseInt(cmd.ExtFields["maxOffset"], 10, 64)
 	if err != nil {
+		err = remote.DataError(err)
 		return
 	}
 	pr.SuggestBrokerID, err = strconv.ParseInt(cmd.ExtFields["suggestWhichBrokerId"], 10, 64)
 	if err != nil {
+		err = remote.DataError(err)
 		return
 	}
 	pr.Messages, err = message.Decode(cmd.Body)
+	if err != nil {
+		err = remote.DataError(err)
+	}
 	return
 }
 
@@ -199,18 +210,18 @@ func (r *RPC) QueryMessageByOffset(addr string, offset int64, to time.Duration) 
 	*message.MessageExt, error,
 ) {
 	h := queryMessageByIDHeader(offset)
-	cmd, err := r.client.RequestSync(addr, NewCommand(ViewMessageByID, h), to)
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(ViewMessageByID, h), to)
 	if err != nil {
 		return nil, err
 	}
 
 	if cmd.Code != Success {
-		return nil, brokerError(cmd)
+		return nil, remote.BrokerError(cmd)
 	}
 
 	msgs, err := message.Decode(cmd.Body)
 	if err != nil {
-		return nil, err
+		return nil, remote.DataError(err)
 	}
 
 	return msgs[0], nil
@@ -242,13 +253,13 @@ func (h *SendBackHeader) ToMap() map[string]string {
 
 // SendBack send back the message
 func (r *RPC) SendBack(addr string, h *SendBackHeader, to time.Duration) (err error) {
-	cmd, err := r.client.RequestSync(addr, NewCommand(ConsumerSendMsgBack, h), to)
+	cmd, err := r.client.RequestSync(addr, remote.NewCommand(ConsumerSendMsgBack, h), to)
 	if err != nil {
-		return
+		return remote.RequestError(err)
 	}
 
 	if cmd.Code != Success {
-		err = brokerError(cmd)
+		err = remote.BrokerError(cmd)
 	}
 	return
 }
@@ -270,25 +281,25 @@ type maxOffsetResponse struct {
 }
 
 // MaxOffset returns the max offset in the consume queue
-func (r *RPC) MaxOffset(addr, topic string, queueID uint8, to time.Duration) (int64, *RPCError) {
+func (r *RPC) MaxOffset(addr, topic string, queueID uint8, to time.Duration) (int64, *remote.RPCError) {
 	cmd, err := r.client.RequestSync(
 		addr,
-		NewCommand(GetMaxOffset, &maxOffsetHeader{
+		remote.NewCommand(GetMaxOffset, &maxOffsetHeader{
 			topic:   topic,
 			queueID: queueID,
 		}),
 		to)
 	if err != nil {
-		return 0, requestError(err)
+		return 0, remote.RequestError(err)
 	}
 
 	if cmd.Code != Success {
-		return 0, responseError(cmd)
+		return 0, remote.BrokerError(cmd)
 	}
 
 	offset, err := strconv.ParseInt(cmd.ExtFields["offset"], 10, 64)
 	if err != nil {
-		return 0, dataError(err)
+		return 0, remote.DataError(err)
 	}
 
 	return offset, nil
@@ -310,27 +321,27 @@ func (h *searchOffsetByTimestampHeader) ToMap() map[string]string {
 
 // SearchOffsetByTimestamp returns the offset of the specified message queue and the timestamp
 func (r *RPC) SearchOffsetByTimestamp(addr, broker, topic string, queueID uint8, timestamp time.Time, to time.Duration) (
-	int64, *RPCError,
+	int64, *remote.RPCError,
 ) {
 	cmd, err := r.client.RequestSync(
 		addr,
-		NewCommand(SearchOffsetByTimestamp, &searchOffsetByTimestampHeader{
+		remote.NewCommand(SearchOffsetByTimestamp, &searchOffsetByTimestampHeader{
 			topic:           topic,
 			queueID:         queueID,
 			timestampMillis: timestamp.UnixNano() / int64(time.Millisecond),
 		}),
 		to)
 	if err != nil {
-		return 0, requestError(err)
+		return 0, remote.RequestError(err)
 	}
 
 	if cmd.Code != Success {
-		return 0, responseError(cmd)
+		return 0, remote.BrokerError(cmd)
 	}
 
 	offset, err := strconv.ParseInt(cmd.ExtFields["offset"], 10, 64)
 	if err != nil {
-		return 0, dataError(err)
+		return 0, remote.DataError(err)
 	}
 
 	return offset, nil
