@@ -3,6 +3,7 @@ package remote
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync/atomic"
@@ -109,7 +110,7 @@ func newChannel(addr string, conf ChannelConfig) (*channel, error) {
 
 	conn, err := net.DialTimeout("tcp4", addr, conf.DialTimeout)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new channel dail %s, error:%s", addr, err)
 	}
 
 	executor, err := executor.NewPoolExecutor(

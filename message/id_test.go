@@ -10,25 +10,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func BenchmarkCreateUniqID(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		CreateUniqID()
-	}
-}
-
 func TestUniqID(t *testing.T) {
-	t.Log(fixString)
+	g := NewGenerator()
+	t.Log(g.fixString)
 	now := time.Now()
-	id := CreateUniqID()
-	assert.True(t, strings.HasPrefix(id, fixString))
+	id := g.Create()
+	assert.True(t, strings.HasPrefix(id, g.fixString))
 
-	s := id[len(fixString):]
+	s := id[len(g.fixString):]
 	d, err := hex.DecodeString(s)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(now.Unix()), binary.BigEndian.Uint32(d))
 	assert.Equal(t, uint8(0), d[4])
 	assert.Equal(t, uint8(0), d[5])
 	assert.Equal(t, uint8(1), d[6])
+}
+
+func BenchmarkCreateUniqID(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		CreateUniqID()
+	}
 }
 
 func TestID(t *testing.T) {

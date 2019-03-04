@@ -2,43 +2,46 @@ package producer
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestFaultItem(t *testing.T) {
-	f1 := &faultItem{name: "f1", latencyMillis: 1, availableTimeMillis: 20}
-	f2 := &faultItem{name: "f2", latencyMillis: 1, availableTimeMillis: 20}
+	// equal
+	now := time.Now()
+	f1 := &faultItem{name: "f1", latency: 1, availableTime: now}
+	f2 := &faultItem{name: "f2", latency: 1, availableTime: now}
 	assert.False(t, f1.less(f2))
 	assert.False(t, f2.less(f1))
 
-	now := unixMillis()
-	f1.availableTimeMillis, f2.availableTimeMillis = now, now
-	f2.latencyMillis = 2
+	// latency less
+	f1.availableTime, f2.availableTime = now, now
+	f2.latency = 2
 	assert.True(t, f1.less(f2))
 	assert.False(t, f2.less(f1))
 
-	now = unixMillis()
-	f1.availableTimeMillis, f2.availableTimeMillis = now, now
-	f2.latencyMillis = 1
-	f2.availableTimeMillis += 21
+	// latency first, then available time
+	now = time.Now()
+	f1.availableTime, f2.availableTime = now, now
+	f2.latency = 1
+	f2.availableTime = f2.availableTime.Add(time.Second)
 	assert.True(t, f1.less(f2))
 	assert.False(t, f2.less(f1))
 
-	now = unixMillis()
-	f1.availableTimeMillis, f2.availableTimeMillis = now-1, now-1
-	f2.availableTimeMillis -= 19
+	// latency first, then available time
+	now = time.Now()
+	f1.availableTime, f2.availableTime = now.Add(-time.Second), now.Add(-time.Second)
+	f2.availableTime = f2.availableTime.Add(-19 * time.Second)
 	assert.False(t, f1.less(f2))
 	assert.True(t, f2.less(f1))
 
-	now = unixMillis()
-	f1.availableTimeMillis, f2.availableTimeMillis = now+1, now+1
-	f2.latencyMillis = 100
-	f2.availableTimeMillis -= 100
-	r12 := f1.less(f2)
-	r21 := f2.less(f1)
-	assert.False(t, r12)
-	assert.True(t, r21)
+	now = time.Now()
+	f1.availableTime, f2.availableTime = now.Add(time.Second), now.Add(time.Second)
+	f2.latency = 100
+	f2.availableTime = f2.availableTime.Add(-100 * time.Second)
+	assert.False(t, f1.less(f2))
+	assert.True(t, f2.less(f1))
 }
 
 func TestFaultColl(t *testing.T) {

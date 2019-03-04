@@ -20,7 +20,7 @@ type MQClient interface {
 	Start() error
 	Shutdown()
 
-	RegisterProducer(p producer) error
+	RegisterProducer(p Producer) error
 	UnregisterProducer(group string)
 	RegisterConsumer(co consumer) error
 	UnregisterConsumer(group string)
@@ -40,7 +40,7 @@ type MQClient interface {
 	SendHeartbeat()
 }
 
-type mqClient struct {
+type MqClient struct {
 	Config
 	sync.RWMutex
 	nameSrvMutex sync.Mutex
@@ -69,7 +69,7 @@ var errBadNamesrvAddrs = errors.New("bad name server address")
 
 type mqClientColl struct {
 	sync.RWMutex
-	eles map[string]MQClient
+	eles map[string]*MqClient
 }
 
 func (cc *mqClientColl) delete(clientID string) bool {
@@ -83,18 +83,18 @@ func (cc *mqClientColl) delete(clientID string) bool {
 }
 
 var mqClients = mqClientColl{
-	eles: make(map[string]MQClient),
+	eles: make(map[string]*MqClient),
 }
 
 var errEmptyClientID = errors.New("empty client id")
 var errEmptyNameSrvAddress = errors.New("empty name server address")
 
-func newMQClient(config *Config, clientID string, logger log.Logger) MQClient {
-	c := &mqClient{
+func newMQClient(config *Config, clientID string, logger log.Logger) *MqClient {
+	c := &MqClient{
 		clientID:       clientID,
 		exitChan:       make(chan struct{}),
 		consumers:      consumerColl{eles: make(map[string]consumer)},
-		producers:      producerColl{eles: make(map[string]producer)},
+		producers:      producerColl{eles: make(map[string]Producer)},
 		admins:         adminColl{eles: make(map[string]admin)},
 		brokerAddrs:    brokerAddrTable{table: make(map[string]map[int32]string)},
 		brokerVersions: brokerVersionTable{table: make(map[string]map[string]int32)},
@@ -118,7 +118,7 @@ func newMQClient(config *Config, clientID string, logger log.Logger) MQClient {
 }
 
 // NewMQClient create the client
-func NewMQClient(config *Config, clientID string, logger log.Logger) (MQClient, error) {
+func NewMQClient(config *Config, clientID string, logger log.Logger) (*MqClient, error) {
 	if clientID == "" {
 		return nil, errEmptyClientID
 	}
@@ -138,7 +138,7 @@ func NewMQClient(config *Config, clientID string, logger log.Logger) (MQClient, 
 }
 
 // RegisterConsumer registers consumer
-func (c *mqClient) RegisterConsumer(co consumer) error {
+func (c *MqClient) RegisterConsumer(co consumer) error {
 	group := co.Group()
 	if group == "" || co == nil {
 		return errors.New("bad consumer params")
@@ -152,13 +152,13 @@ func (c *mqClient) RegisterConsumer(co consumer) error {
 }
 
 // UnregisterConsumer unregister producer
-func (c *mqClient) UnregisterConsumer(group string) {
+func (c *MqClient) UnregisterConsumer(group string) {
 	c.consumers.delete(group)
 	c.unregisterClient("", group)
 }
 
 // RegisterProducer registers producer
-func (c *mqClient) RegisterProducer(p producer) error {
+func (c *MqClient) RegisterProducer(p Producer) error {
 	group := p.Group()
 	if group == "" || p == nil {
 		return errors.New("bad producer params")
@@ -172,12 +172,12 @@ func (c *mqClient) RegisterProducer(p producer) error {
 }
 
 // UnregisterProducer unregister producer
-func (c *mqClient) UnregisterProducer(group string) {
+func (c *MqClient) UnregisterProducer(group string) {
 	c.producers.delete(group)
 	c.unregisterClient(group, "")
 }
 
-func (c *mqClient) unregisterClient(producerGroup, consumerGroup string) {
+func (c *MqClient) unregisterClient(producerGroup, consumerGroup string) {
 	clientID, timeout := c.clientID, 3*time.Second
 	c.Lock()
 	for _, name := range c.brokerAddrs.brokerNames() {
@@ -195,7 +195,7 @@ func (c *mqClient) unregisterClient(producerGroup, consumerGroup string) {
 }
 
 // RegisterAdmin registers admin
-func (c *mqClient) RegisterAdmin(a admin) error {
+func (c *MqClient) RegisterAdmin(a admin) error {
 	group := a.Group()
 	if group == "" || a == nil {
 		return errors.New("bad admin params")
@@ -209,12 +209,12 @@ func (c *mqClient) RegisterAdmin(a admin) error {
 }
 
 // UnregisterAdmin unregister producer
-func (c *mqClient) UnregisterAdmin(group string) {
+func (c *MqClient) UnregisterAdmin(group string) {
 	c.admins.delete(group)
 }
 
 // Start client tasks
-func (c *mqClient) Start() error {
+func (c *MqClient) Start() error {
 	c.Lock()
 	defer c.Unlock()
 	switch c.state {
@@ -233,7 +233,7 @@ func (c *mqClient) Start() error {
 }
 
 // Shutdown client
-func (c *mqClient) Shutdown() {
+func (c *MqClient) Shutdown() {
 	c.logger.Infof("shutdown mqclient, state %s", c.state.String())
 	if c.producers.size() > 0 { // NOTE here is different from ROCKETMQ JAVA SDK, since the DefaultMQProducer is not stored here
 		c.logger.Info("producer not empty ignore")
@@ -264,7 +264,7 @@ func (c *mqClient) Shutdown() {
 	c.logger.Info("shutdown mqclient END")
 }
 
-func (c *mqClient) updateTopicRoute() {
+func (c *MqClient) updateTopicRoute() {
 	topics := make([]string, 0, 256)
 
 	for _, c := range c.consumers.coll() {
@@ -281,18 +281,18 @@ func (c *mqClient) updateTopicRoute() {
 }
 
 // UpdateTopicRouterInfoFromNamesrv udpate the topic for the producer/consumer from the namesrv
-func (c *mqClient) UpdateTopicRouterInfoFromNamesrv(topic string) (err error) {
+func (c *MqClient) UpdateTopicRouterInfoFromNamesrv(topic string) (err error) {
 	_, err = c.updateTopicRouterInfoFromNamesrv(topic)
 	return
 }
 
 // GetMasterBrokerAddr returns the master broker address
-func (c *mqClient) GetMasterBrokerAddr(brokerName string) string {
+func (c *MqClient) GetMasterBrokerAddr(brokerName string) string {
 	return c.brokerAddrs.get(brokerName, rocketmq.MasterID)
 }
 
 // GetMasterBrokerAddrs returns all the master broker addresses
-func (c *mqClient) GetMasterBrokerAddrs() []string {
+func (c *MqClient) GetMasterBrokerAddrs() []string {
 	return c.brokerAddrs.getByBrokerID(rocketmq.MasterID)
 }
 
@@ -305,7 +305,7 @@ type FindBrokerResult struct {
 
 // FindBrokerAddr finds the broker address, returns the address with specified broker id first
 // otherwise, returns any one
-func (c *mqClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
+func (c *MqClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
 	*FindBrokerResult, error,
 ) {
 	addr := c.brokerAddrs.get(brokerName, hintBrokerID)
@@ -325,7 +325,7 @@ func (c *mqClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bo
 }
 
 // FindAnyBrokerAddr returns any broker whose name is the specified name
-func (c *mqClient) FindAnyBrokerAddr(brokerName string) (
+func (c *MqClient) FindAnyBrokerAddr(brokerName string) (
 	*FindBrokerResult, error,
 ) {
 	addrData, exist := c.brokerAddrs.anyOneAddrOf(brokerName)
@@ -340,7 +340,7 @@ func (c *mqClient) FindAnyBrokerAddr(brokerName string) (
 	}, nil
 }
 
-func (c *mqClient) getTopicRouteInfo(topic string) (*route.TopicRouter, error) {
+func (c *MqClient) getTopicRouteInfo(topic string) (*route.TopicRouter, error) {
 	var err error
 	l := len(c.NameServerAddrs)
 	for i, cc := rand.Intn(l), l; cc > 0; i, cc = i+1, cc-1 {
@@ -356,7 +356,7 @@ func (c *mqClient) getTopicRouteInfo(topic string) (*route.TopicRouter, error) {
 	return nil, err
 }
 
-func (c *mqClient) updateTopicRouterInfoFromNamesrv(topic string) (updated bool, err error) {
+func (c *MqClient) updateTopicRouterInfoFromNamesrv(topic string) (updated bool, err error) {
 	c.nameSrvMutex.Lock()
 	defer c.nameSrvMutex.Unlock()
 
@@ -389,7 +389,7 @@ func (c *mqClient) updateTopicRouterInfoFromNamesrv(topic string) (updated bool,
 	return true, nil
 }
 
-func (c *mqClient) isDiff(topic string, router *route.TopicRouter) bool {
+func (c *MqClient) isDiff(topic string, router *route.TopicRouter) bool {
 	route.SortBrokerData(router.Brokers)
 	route.SortTopicQueue(router.Queues)
 
@@ -414,11 +414,11 @@ func (c *mqClient) isDiff(topic string, router *route.TopicRouter) bool {
 	return false
 }
 
-func (c *mqClient) selectNamesrv() string {
+func (c *MqClient) selectNamesrv() string {
 	return c.NameServerAddrs[rand.Intn(len(c.NameServerAddrs))]
 }
 
-func (c *mqClient) SendHeartbeat() {
+func (c *MqClient) SendHeartbeat() {
 	hr := c.prepareHeartbeatData()
 
 	hasConsumer, hasProducer := len(hr.Consumers) != 0, len(hr.Producers) != 0
@@ -461,7 +461,7 @@ func (c *mqClient) SendHeartbeat() {
 	}
 }
 
-func (c *mqClient) prepareHeartbeatData() *rpc.HeartbeatRequest {
+func (c *MqClient) prepareHeartbeatData() *rpc.HeartbeatRequest {
 	ps := c.producers.coll()
 	producers := make([]rpc.Producer, len(ps))
 	for i := range ps {
@@ -498,7 +498,7 @@ func toRPCSubscriptionDatas(datas []*Data) []*rpc.Data {
 	return subscriptionDatas
 }
 
-func (c *mqClient) cleanOfflineBroker() {
+func (c *MqClient) cleanOfflineBroker() {
 	c.nameSrvMutex.Lock()
 	defer c.nameSrvMutex.Unlock()
 
@@ -522,7 +522,7 @@ func (c *mqClient) cleanOfflineBroker() {
 	}
 }
 
-func (c *mqClient) isBrokerAddrInRouter(addr string) bool {
+func (c *MqClient) isBrokerAddrInRouter(addr string) bool {
 	for _, r := range c.routersOfTopic.Routers() {
 		for _, broker := range r.Brokers {
 			for _, addr1 := range broker.Addresses {
@@ -535,7 +535,7 @@ func (c *mqClient) isBrokerAddrInRouter(addr string) bool {
 	return false
 }
 
-func (c *mqClient) scheduleTasks() {
+func (c *MqClient) scheduleTasks() {
 	c.schedule(10*time.Millisecond, c.PollNameServerInterval, c.updateTopicRoute)
 	c.schedule(time.Second, c.HeartbeatBrokerInterval, func() {
 		c.SendHeartbeat()
@@ -543,7 +543,7 @@ func (c *mqClient) scheduleTasks() {
 	})
 }
 
-func (c *mqClient) schedule(delay, period time.Duration, f func()) {
+func (c *MqClient) schedule(delay, period time.Duration, f func()) {
 	c.Add(1)
 	go func() {
 		defer c.Done()
@@ -581,7 +581,7 @@ OUT:
 	return r
 }
 
-func (c *mqClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
+func (c *MqClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
 	switch cmd.Code {
 	case rpc.NotifyConsumerIdsChanged:
 		for _, co := range c.consumers.coll() {
@@ -613,18 +613,18 @@ func (c *mqClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Comman
 	return true
 }
 
-func (c *mqClient) RemotingClient() remote.Client {
+func (c *MqClient) RemotingClient() remote.Client {
 	return c.Client
 }
 
-func (c *mqClient) AdminCount() int {
+func (c *MqClient) AdminCount() int {
 	return c.admins.size()
 }
 
-func (c *mqClient) ConsumerCount() int {
+func (c *MqClient) ConsumerCount() int {
 	return c.consumers.size()
 }
 
-func (c *mqClient) ProducerCount() int {
+func (c *MqClient) ProducerCount() int {
 	return c.producers.size()
 }

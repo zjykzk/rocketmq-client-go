@@ -16,7 +16,7 @@ const (
 )
 
 type messageSendBack interface {
-	SendBack(m *message.MessageExt, delayLevel int, broker string) error
+	SendBack(m *message.Ext, delayLevel int, broker string) error
 }
 
 type consumeService struct {
@@ -87,7 +87,7 @@ func newConsumeService(conf consumeServiceConfig) (*consumeService, error) {
 	return c, nil
 }
 
-func (cs *consumeService) resetRetryTopic(messages []*message.MessageExt) {
+func (cs *consumeService) resetRetryTopic(messages []*message.Ext) {
 	retryTopic := retryTopic(cs.group)
 	for _, m := range messages {
 		if retryTopic == m.GetProperty(message.PropertyRetryTopic) {

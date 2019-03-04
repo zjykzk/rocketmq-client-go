@@ -2,6 +2,7 @@ package producer
 
 import (
 	"testing"
+	"time"
 
 	"github.com/zjykzk/rocketmq-client-go/message"
 
@@ -42,14 +43,14 @@ func (tr *mockTopicRouter) MessageQueues() []*message.Queue {
 		},
 	}
 }
-func (tr *mockTopicRouter) WriteCount(broker string) int {
+func (tr *mockTopicRouter) WriteQueueCount(broker string) int {
 	tr.writeCount++
 	if tr.writeCount == 1 {
 		return 0
 	}
 	return tr.writeCount
 }
-func (tr *mockTopicRouter) SelectOneQueueHint(lastBroker string) *message.Queue {
+func (tr *mockTopicRouter) SelectOneQueueNotOf(lastBroker string) *message.Queue {
 	return &message.Queue{
 		BrokerName: "HINT",
 		Topic:      "HINT",
@@ -59,28 +60,28 @@ func (tr *mockTopicRouter) SelectOneQueueHint(lastBroker string) *message.Queue 
 func TestLatency(t *testing.T) {
 	fs := NewMQFaultStrategy(true)
 
-	fs.UpdateFault("b1", 1, false)
-	assert.True(t, fs.faultLatency.Available("b1"))
+	fs.UpdateFault("b1", 1*time.Millisecond, false)
+	assert.True(t, fs.Available("b1"))
 
-	fs.UpdateFault("b1", 99, false)
-	assert.True(t, fs.faultLatency.Available("b1"))
+	fs.UpdateFault("b1", 99*time.Millisecond, false)
+	assert.True(t, fs.Available("b1"))
 
-	fs.UpdateFault("b1", 49, false)
-	assert.True(t, fs.faultLatency.Available("b1"))
+	fs.UpdateFault("b1", 49*time.Millisecond, false)
+	assert.True(t, fs.Available("b1"))
 
-	fs.UpdateFault("b1", 50, false)
-	assert.True(t, fs.faultLatency.Available("b1"))
+	fs.UpdateFault("b1", 50*time.Millisecond, false)
+	assert.True(t, fs.Available("b1"))
 
-	fs.UpdateFault("b1", 100, false)
-	assert.True(t, fs.faultLatency.Available("b1"))
+	fs.UpdateFault("b1", 100*time.Millisecond, false)
+	assert.True(t, fs.Available("b1"))
 
 	fs.sendLatencyFaultEnable = false
-	fs.UpdateFault("b1", 1200, false)
-	assert.True(t, fs.faultLatency.Available("b1"))
+	fs.UpdateFault("b1", 1200*time.Millisecond, false)
+	assert.True(t, fs.Available("b1"))
 
 	fs.sendLatencyFaultEnable = true
-	fs.UpdateFault("b1", 600, false)
-	assert.False(t, fs.faultLatency.Available("b1"))
+	fs.UpdateFault("b1", 600*time.Millisecond, false)
+	assert.False(t, fs.Available("b1"))
 }
 
 func TestSelectOneQueue(t *testing.T) {

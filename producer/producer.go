@@ -1,18 +1,20 @@
 package producer
 
 import (
-	"errors"
+	"bytes"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/klauspost/compress/zlib"
+
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -21,6 +23,7 @@ type Config struct {
 	rocketmq.Client
 	SendMsgTimeout                   time.Duration
 	CompressSizeThreshod             int32
+	CompressLevel                    int32
 	RetryTimesWhenSendFailed         int32
 	RetryTimesWhenSendAsyncFailed    int32
 	RetryAnotherBrokerWhenNotStoreOK bool
@@ -38,6 +41,7 @@ var defaultConfig = Config{
 	},
 	SendMsgTimeout:                   3 * time.Second,
 	CompressSizeThreshod:             1 << 12, // 4K
+	CompressLevel:                    5,
 	RetryTimesWhenSendFailed:         2,
 	RetryTimesWhenSendAsyncFailed:    2,
 	RetryAnotherBrokerWhenNotStoreOK: false,
@@ -52,6 +56,7 @@ type Producer struct {
 	rocketmq.Server
 	topicPublishInfos topicPublishInfoTable
 	client            client.MQClient
+	mqclient          mqClient
 	mqFaultStrategy   *MQFaultStrategy
 
 	Logger log.Logger
@@ -86,12 +91,13 @@ func (p *Producer) start() (err error) {
 	p.topicPublishInfos.table = make(map[string]*topicPublishInfo)
 
 	p.ClientID = client.BuildMQClientID(p.ClientIP, p.UnitName, p.InstanceName)
-	p.client, err = client.NewMQClient(
+	client, err := client.NewMQClient(
 		&client.Config{
 			HeartbeatBrokerInterval: p.HeartbeatBrokerInterval,
 			PollNameServerInterval:  p.PollNameServerInterval,
 			NameServerAddrs:         p.NameServerAddrs,
 		}, p.ClientID, p.Logger)
+	p.mqclient, p.client = client, client
 	if err != nil {
 		return
 	}
@@ -186,31 +192,59 @@ func (p *Producer) NeedUpdateTopicPublish(topic string) bool {
 // SendSync sends the message
 // the message must not be nil
 func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err error) {
-	if m == nil {
-		return nil, errEmptyMessage
-	}
+	return p.sendSync(&messageWrap{Message: m})
+}
 
-	if len(m.Body) == 0 {
-		return nil, errEmptyBody
-	}
+type messageWrap struct {
+	*message.Message
+	isBatch bool
+}
 
-	if m.Topic == "" {
-		return nil, errEmptyTopic
-	}
+func (p *Producer) sendSync(m *messageWrap) (sendResult *SendResult, err error) {
 
-	pi, err := p.getRouters(m.Topic)
+	err = p.checkMessage(m.Message)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	m.SetUniqID(message.CreateUniqID())
+	routers, err := p.getRouters(m.Topic)
+	if err != nil {
+		return
+	}
+
+	originBody := m.Body
 
 	sysFlag := int32(0)
-	if p.tryToCompress(m) {
+	ok, err := p.tryToCompress(m.Message)
+	if err != nil {
+		return
+	}
+	if ok {
 		sysFlag |= message.Compress
 	}
 
-	return p.sendMessageWithFault(pi, m, sysFlag)
+	m.SetUniqID(message.CreateUniqID())
+	sendResult, err = p.sendMessageWithLatency(routers, m, sysFlag)
+
+	m.Body = originBody
+
+	return
+}
+
+func (p *Producer) checkMessage(m *message.Message) error {
+	if m == nil {
+		return errEmptyMessage
+	}
+
+	if len(m.Body) == 0 {
+		return errEmptyBody
+	}
+
+	if len(m.Body) > int(p.MaxMessageSize) {
+		return errLargeBody
+	}
+
+	return rocketmq.CheckTopic(m.Topic)
 }
 
 func (p *Producer) getRouters(topic string) (*topicPublishInfo, error) {
@@ -236,8 +270,8 @@ func (p *Producer) getRouters(topic string) (*topicPublishInfo, error) {
 	return pi, nil
 }
 
-func (p *Producer) sendMessageWithFault(
-	router *topicPublishInfo, m *message.Message, sysFlag int32,
+func (p *Producer) sendMessageWithLatency(
+	router *topicPublishInfo, m *messageWrap, sysFlag int32,
 ) (
 	sendResult *SendResult, err error,
 ) {
@@ -245,55 +279,43 @@ func (p *Producer) sendMessageWithFault(
 		q           *message.Queue
 		brokersSent = make([]string, p.RetryTimesWhenSendFailed+1)
 		retryCount  = int32(1)
-		prevBody    = m.Body
 	)
 
 	startPoint := time.Now()
 	prev := startPoint
 	for maxSendCount := p.RetryTimesWhenSendFailed + 1; retryCount < maxSendCount; retryCount++ {
 		q = p.mqFaultStrategy.SelectOneQueue(router, brokersSent[retryCount-1])
-		sendResult, err = p.sendSync(m, q, sysFlag)
+		sendResult, err = p.sendMessageWithQueueSync(m, q, sysFlag)
 
 		now := time.Now()
-		cost := now.Sub(prev) / 10e6
+		cost := now.Sub(prev)
 
 		prev = now
 		brokersSent[retryCount] = q.BrokerName
 
 		if err != nil {
-			p.mqFaultStrategy.UpdateFault(q.BrokerName, int64(cost), true)
-			p.Logger.Errorf(
-				"resend at once %s RT:%dms, Queue:%s, err %s", m.GetUniqID(), cost/time.Millisecond, q, err,
-			)
+			p.mqFaultStrategy.UpdateFault(q.BrokerName, cost, true)
+			p.Logger.Errorf("resend at once %s RT:%s, Queue:%s, err %s", m.GetUniqID(), cost, q, err)
 			p.Logger.Warn(m.String())
 			continue
 		}
 
-		p.mqFaultStrategy.UpdateFault(q.BrokerName, int64(cost), false)
+		p.mqFaultStrategy.UpdateFault(q.BrokerName, cost, false)
 		goto END
 	}
 
 	p.Logger.Errorf("send %d times, still failed, cost %s, topic:%s, sendBrokers:%v",
 		retryCount-1, time.Now().Sub(startPoint), m.Topic, brokersSent[1:])
 END:
-	m.Body = prevBody
 
 	return
 }
 
-func (p *Producer) sendSync(m *message.Message, q *message.Queue, sysFlag int32) (
+func (p *Producer) sendMessageWithQueueSync(m *messageWrap, q *message.Queue, sysFlag int32) (
 	*SendResult, error,
 ) {
-	addr := p.client.GetMasterBrokerAddr(q.BrokerName)
-	if addr == "" {
-		p.Logger.Errorf("cannot find broker:" + q.BrokerName)
-		return nil, errors.New("cannot find broker")
-	}
-
-	println("=============", q.BrokerName, addr)
-
-	resp, err := rpc.SendMessageSync(
-		p.client.RemotingClient(), addr, m.Body, p.buildSendHeader(m, q, sysFlag), p.SendMsgTimeout,
+	resp, err := p.mqclient.SendMessageSync(
+		q.BrokerName, m.Body, p.buildSendHeader(m, q, sysFlag), p.SendMsgTimeout,
 	)
 	if err != nil {
 		p.Logger.Errorf("request send message %s sync error:%v", m.String(), err)
@@ -326,7 +348,7 @@ func (p *Producer) sendSync(m *message.Message, q *message.Queue, sysFlag int32)
 	return sendResult, nil
 }
 
-func (p *Producer) buildSendHeader(m *message.Message, q *message.Queue, sysFlag int32) (
+func (p *Producer) buildSendHeader(m *messageWrap, q *message.Queue, sysFlag int32) (
 	header *rpc.SendHeader,
 ) {
 	header = &rpc.SendHeader{
@@ -340,7 +362,7 @@ func (p *Producer) buildSendHeader(m *message.Message, q *message.Queue, sysFlag
 		Flag:                  m.Flag,
 		Properties:            message.Properties2String(m.Properties),
 		UnitMode:              p.IsUnitMode,
-		Batch:                 false,
+		Batch:                 m.isBatch,
 	}
 
 	if strings.HasPrefix(header.Topic, rocketmq.RetryGroupTopicPrefix) {
@@ -367,6 +389,50 @@ func (p *Producer) buildSendHeader(m *message.Message, q *message.Queue, sysFlag
 	return
 }
 
-func (p *Producer) tryToCompress(m *message.Message) bool {
-	return false // TODO
+func (p *Producer) tryToCompress(m *message.Message) (bool, error) {
+	body := m.Body
+	if len(body) < int(p.CompressSizeThreshod) {
+		return false, nil
+	}
+
+	data, err := compress(body, int(p.CompressLevel))
+	if err == nil {
+		m.Body = data
+	} else {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// compress compress the data, the result maybe different from the result generated by the java
+// but they are compitable
+func compress(data []byte, level int) ([]byte, error) {
+	var b bytes.Buffer
+
+	w, err := zlib.NewWriterLevel(&b, level)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	err = w.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return b.Bytes(), nil
+}
+
+// SendBatchSync send the batch message sync
+func (p *Producer) SendBatchSync(batch *message.Batch) (sendResult *SendResult, err error) {
+	m, err := batch.ToMessage()
+	if err != nil {
+		return
+	}
+
+	return p.sendSync(&messageWrap{Message: m, isBatch: true})
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
-// producer interface needed by reblance
-type producer interface {
+// Producer interface needed by reblance
+type Producer interface {
 	Group() string
 	PublishTopics() []string
 	UpdateTopicPublish(topic string, router *route.TopicRouter)
@@ -16,12 +16,12 @@ type producer interface {
 
 type producerColl struct {
 	sync.RWMutex
-	eles map[string]producer // key: group name, NOTE donot modify directly
+	eles map[string]Producer // key: group name, NOTE donot modify directly
 }
 
-func (pc *producerColl) coll() []producer {
+func (pc *producerColl) coll() []Producer {
 	pc.RLock()
-	coll, i := make([]producer, len(pc.eles)), 0
+	coll, i := make([]Producer, len(pc.eles)), 0
 	for _, p := range pc.eles {
 		coll[i] = p
 		i++
@@ -30,7 +30,7 @@ func (pc *producerColl) coll() []producer {
 	return coll
 }
 
-func (pc *producerColl) putIfAbsent(group string, p producer) (prev producer, suc bool) {
+func (pc *producerColl) putIfAbsent(group string, p Producer) (prev Producer, suc bool) {
 	pc.Lock()
 	prev, exist := pc.eles[group]
 	if !exist {

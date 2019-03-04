@@ -54,6 +54,8 @@ func NewClient(
 		decoder:          DecoderFunc(decode),
 		packetReader:     PacketReaderFunc(ReadPacket),
 		logger:           logger,
+		channels:         make(map[string]*channel, 16),
+		responseFutures:  make(map[int64]*responseFuture, 256),
 	}
 	return c
 }

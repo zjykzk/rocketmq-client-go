@@ -14,7 +14,7 @@ type rpcI interface {
 	DeleteTopicInBroker(addr, topic string, timeout time.Duration) error
 	DeleteTopicInNamesrv(addr, topic string, timeout time.Duration) error
 	GetBrokerClusterInfo(addr string, timeout time.Duration) (*route.ClusterInfo, error)
-	QueryMessageByOffset(addr string, offset int64, timeout time.Duration) (*message.MessageExt, error)
+	QueryMessageByOffset(addr string, offset int64, timeout time.Duration) (*message.Ext, error)
 	MaxOffset(addr, topic string, queueID uint8, timeout time.Duration) (int64, *remote.RPCError)
 	GetConsumerIDs(addr, group string, timeout time.Duration) ([]string, error)
 }

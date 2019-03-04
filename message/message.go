@@ -2,12 +2,13 @@ package message
 
 import (
 	"bytes"
-	"compress/zlib"
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"strconv"
 	"strings"
+
+	"github.com/klauspost/compress/zlib"
 
 	"github.com/zjykzk/rocketmq-client-go/buf"
 )
@@ -20,38 +21,46 @@ type Message struct {
 	Flag       int32
 }
 
+// SetKey update keys
 func (m *Message) SetKey(keys string) {
 	m.makeSurePropertiesInst()
 	m.Properties[PropertyKeys] = keys
 }
 
+// PutProperty update property
 func (m *Message) PutProperty(k, v string) {
 	m.makeSurePropertiesInst()
 	m.Properties[k] = v
 }
 
+// ClearProperty remove the property
 func (m *Message) ClearProperty(k string) {
 	delete(m.Properties, k)
 }
 
+// GetProperty get the property byt the specify key
 func (m *Message) GetProperty(k string) string {
 	return m.Properties[k]
 }
 
+// GetTags return the property of the tags
 func (m *Message) GetTags() string {
 	return m.Properties[PropertyTags]
 }
 
+// SetTags set the property of the tags
 func (m *Message) SetTags(tags string) {
 	m.makeSurePropertiesInst()
 	m.Properties[PropertyTags] = tags
 }
 
+// SetKeys update the property of the keys with multi-value, split with space
 func (m *Message) SetKeys(ks []string) {
 	m.makeSurePropertiesInst()
 	m.Properties[PropertyKeys] = strings.Join(ks, KeySep)
 }
 
+// GetDelayTimeLevel returns the property of the delay time level
 func (m *Message) GetDelayTimeLevel() int {
 	l := m.Properties[PropertyDelayTimeLevel]
 	if l == "" {
@@ -61,18 +70,25 @@ func (m *Message) GetDelayTimeLevel() int {
 	return i
 }
 
+// SetDelayTimeLevel update the property of the delay time level
 func (m *Message) SetDelayTimeLevel(l int) {
 	m.makeSurePropertiesInst()
 	m.Properties[PropertyDelayTimeLevel] = strconv.Itoa(l)
 }
 
+// SetWaitStoreMsgOK update the property of the waiting store msg ok
 func (m *Message) SetWaitStoreMsgOK(ok bool) {
 	m.makeSurePropertiesInst()
 	m.Properties[PropertyWaitStoreMsgOK] = strconv.FormatBool(ok)
 }
 
+// GetWaitStoreMsgOK returns the property of the waiting store msag ok
 func (m *Message) GetWaitStoreMsgOK() bool {
-	switch ok := m.Properties[PropertyWaitStoreMsgOK]; ok {
+	return getWaitStoreMsgOK(m.Properties)
+}
+
+func getWaitStoreMsgOK(properties map[string]string) bool {
+	switch ok := properties[PropertyWaitStoreMsgOK]; ok {
 	case "", "true":
 		return true
 	case "false":
@@ -82,11 +98,13 @@ func (m *Message) GetWaitStoreMsgOK() bool {
 	}
 }
 
+// SetConsumeStartTimestamp update the property of the consuming start timestamp
 func (m *Message) SetConsumeStartTimestamp(timestamp int64) {
 	m.makeSurePropertiesInst()
 	m.Properties[PropertyConsumeStartTimestamp] = strconv.FormatInt(timestamp, 10)
 }
 
+// GetConsumeStartTimestamp returns the property of the consuming start timestamp
 func (m *Message) GetConsumeStartTimestamp() (timestamp int64, ok bool) {
 	l, ok := m.Properties[PropertyConsumeStartTimestamp]
 	if !ok {
@@ -96,9 +114,14 @@ func (m *Message) GetConsumeStartTimestamp() (timestamp int64, ok bool) {
 	return
 }
 
-// GetUniqID returns the unique id
+// GetUniqID returns the unique id from the properties
 func (m *Message) GetUniqID() string {
-	return m.Properties[PropertyUniqClientMessageIDKeyidx]
+	return GetUniqID(m.Properties)
+}
+
+// GetUniqID returns the unique id from the properties
+func GetUniqID(properties map[string]string) string {
+	return properties[PropertyUniqClientMessageIDKeyidx]
 }
 
 // SetUniqID set the unique id
@@ -120,16 +143,24 @@ func (m *Message) String() string {
 	)
 }
 
+// Addr the ip address
 type Addr struct {
 	Host []byte
 	Port uint16
 }
 
 func (addr *Addr) String() string {
+	if len(addr.Host) == 4 {
+		return fmt.Sprintf(
+			"%d.%d.%d.%d:%d", addr.Host[0], addr.Host[1], addr.Host[2], addr.Host[3], addr.Port,
+		)
+	}
+
 	return fmt.Sprintf("%v:%d", addr.Host, addr.Port)
 }
 
-type MessageExt struct {
+// Ext the message presentation with storage information
+type Ext struct {
 	Message
 	StoreSize                 int32
 	QueueOffset               int64
@@ -146,7 +177,7 @@ type MessageExt struct {
 	QueueID                   uint8
 }
 
-func (m *MessageExt) String() string {
+func (m *Ext) String() string {
 	return fmt.Sprintf("MessageExt:[Message=%s,QueueID=%d,StoreSize=%d,QueueOffset=%d,SysFlag=%d,"+
 		"BornTimestamp=%d,BornHost=%s,StoreTimestamp=%d,StoreHost=%s,MsgID=%s,CommitLogOffset=%d,"+
 		"BodyCRC=%d,ReconsumeTimes=%d,PreparedTransactionOffset=%d]", m.Message.String(), m.QueueID,
@@ -156,14 +187,14 @@ func (m *MessageExt) String() string {
 }
 
 // Decode decodes the bytes to messages
-func Decode(d []byte) (msgs []*MessageExt, err error) {
+func Decode(d []byte) (msgs []*Ext, err error) {
 	buf := buf.WrapBytes(binary.BigEndian, d)
 
 AGAIN:
 	if buf.Len() == 0 {
 		return
 	}
-	m := &MessageExt{}
+	m := &Ext{}
 	m.StoreSize, err = buf.GetInt32()
 	if err != nil {
 		return
@@ -286,6 +317,7 @@ AGAIN:
 	goto AGAIN
 }
 
+// predefined consts
 const (
 	MagicCodePostion      = 4
 	FlagPostion           = 16
@@ -316,20 +348,36 @@ var (
 	propertySepStr  = string([]byte{PropertySep})
 )
 
-// Properties2String converts properties to string
-func Properties2String(properties map[string]string) string {
+// Properties2Bytes converts properties to byte array
+func Properties2Bytes(properties map[string]string) []byte {
 	if len(properties) == 0 {
-		return ""
+		return nil
 	}
 
-	bs := make([]byte, 0, 1024)
+	bs, n := make([]byte, propertiesLength(properties)), 0
 	for k, v := range properties {
-		bs = append(bs, []byte(k)...)
-		bs = append(bs, NameValueSep)
-		bs = append(bs, []byte(v)...)
-		bs = append(bs, PropertySep)
+		n += copy(bs[n:], k)
+		bs[n] = NameValueSep
+		n++
+
+		n += copy(bs[n:], v)
+		bs[n] = PropertySep
+		n++
 	}
-	return string(bs)
+
+	return bs
+}
+
+func propertiesLength(properties map[string]string) (size int) {
+	for k, v := range properties {
+		size += len(k) + 1 + len(v) + 1
+	}
+	return
+}
+
+// Properties2String converts properties to string
+func Properties2String(properties map[string]string) string {
+	return string(Properties2Bytes(properties))
 }
 
 // String2Properties converts string to map

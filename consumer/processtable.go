@@ -43,7 +43,7 @@ func newProcessQueue() *processQueue {
 	return &processQueue{}
 }
 
-func (pq *processQueue) putMessages(msgs []*message.MessageExt) {
+func (pq *processQueue) putMessages(msgs []*message.Ext) {
 	newCount := 0
 	pq.Lock()
 	for _, m := range msgs {
@@ -58,7 +58,7 @@ func (pq *processQueue) putMessages(msgs []*message.MessageExt) {
 	pq.Unlock()
 }
 
-func (pq *processQueue) removeMessages(msgs []*message.MessageExt) {
+func (pq *processQueue) removeMessages(msgs []*message.Ext) {
 	removedCount := 0
 	pq.Lock()
 	for _, m := range msgs {
@@ -101,7 +101,7 @@ func (pq *processQueue) isPullExpired(timeout time.Duration) bool {
 	return time.Since(pq.lastPullTime) >= timeout
 }
 
-func getConsumeStartTime(m *message.MessageExt) int64 {
+func getConsumeStartTime(m *message.Ext) int64 {
 	v := m.GetProperty(message.PropertyConsumeStartTimestamp)
 	i, _ := strconv.ParseInt(v, 10, 64)
 	return i

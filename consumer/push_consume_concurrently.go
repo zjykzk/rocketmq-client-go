@@ -30,11 +30,11 @@ type ConcurrentlyContext struct {
 
 // ConcurrentlyConsumer consumer consumes the messages concurrently
 type ConcurrentlyConsumer interface {
-	Consume(messages []*message.MessageExt, ctx *ConcurrentlyContext) ConsumeConcurrentlyStatus
+	Consume(messages []*message.Ext, ctx *ConcurrentlyContext) ConsumeConcurrentlyStatus
 }
 
 type consumeConcurrentlyRequest struct {
-	messages     []*message.MessageExt
+	messages     []*message.Ext
 	processQueue *processQueue
 	messageQueue *message.Queue
 }
@@ -170,7 +170,7 @@ func (cs *consumeConcurrentlyService) processConsumeResult(
 		failedIndex = 0
 	}
 
-	var removedMsgs []*message.MessageExt
+	var removedMsgs []*message.Ext
 	switch cs.messageModel {
 	case BroadCasting:
 		removedMsgs = cs.processBroadcasting(failedIndex, r)
@@ -191,7 +191,7 @@ func (cs *consumeConcurrentlyService) processConsumeResult(
 func (cs *consumeConcurrentlyService) processBroadcasting(
 	failedIndex int, r *consumeConcurrentlyRequest,
 ) (
-	removedMsgs []*message.MessageExt,
+	removedMsgs []*message.Ext,
 ) {
 	for _, m := range r.messages[failedIndex:] {
 		cs.logger.Warnf("broadcasting, the message consumed failed and drop it, %s", m.String())
@@ -210,13 +210,13 @@ func min(a, b int) int {
 func (cs *consumeConcurrentlyService) processClustering(
 	failedIndex int, ctx *ConcurrentlyContext, r *consumeConcurrentlyRequest,
 ) (
-	removedMsgs []*message.MessageExt,
+	removedMsgs []*message.Ext,
 ) {
-	removedMsgs = make([]*message.MessageExt, failedIndex, len(r.messages))
+	removedMsgs = make([]*message.Ext, failedIndex, len(r.messages))
 	copy(removedMsgs, r.messages[:failedIndex])
 
 	consumeFailedMsgs := r.messages[failedIndex:]
-	sendbackFailedMsgs := make([]*message.MessageExt, 0, len(consumeFailedMsgs))
+	sendbackFailedMsgs := make([]*message.Ext, 0, len(consumeFailedMsgs))
 	delayLevel, broker := ctx.DelayLevelWhenNextConsume, ctx.MessageQueue.BrokerName
 	for _, m := range consumeFailedMsgs {
 		err := cs.messageSendBack.SendBack(m, delayLevel, broker)
@@ -239,7 +239,7 @@ func (cs *consumeConcurrentlyService) processClustering(
 }
 
 func (cs *consumeConcurrentlyService) submitConsumeRequest(
-	messages []*message.MessageExt, processQueue *processQueue, messageQueue *message.Queue,
+	messages []*message.Ext, processQueue *processQueue, messageQueue *message.Queue,
 ) {
 	count, batchSize := len(messages), cs.batchSize
 	for i := 0; i < count; i += batchSize {
@@ -327,11 +327,11 @@ type concurrentProcessQueue struct {
 	processQueue
 }
 
-func (cpq *concurrentProcessQueue) minOffsetMessage() (m *message.MessageExt, ok bool) {
+func (cpq *concurrentProcessQueue) minOffsetMessage() (m *message.Ext, ok bool) {
 	cpq.RLock()
 	if cpq.messages.Size() > 0 {
 		_, v := cpq.messages.First()
-		m = v.(*message.MessageExt)
+		m = v.(*message.Ext)
 		ok = true
 	}
 	cpq.RUnlock()
@@ -342,7 +342,7 @@ func (cpq *concurrentProcessQueue) removeIfMinOffset(of int64) (ok bool) {
 	cpq.Lock()
 	if cpq.messages.Size() > 0 {
 		_, v := cpq.messages.First()
-		if of == v.(*message.MessageExt).QueueOffset {
+		if of == v.(*message.Ext).QueueOffset {
 			cpq.messages.Remove(offset(of))
 		}
 		ok = true

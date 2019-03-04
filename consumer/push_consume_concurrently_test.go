@@ -19,7 +19,7 @@ type mockConcurrentlyConsumer struct {
 }
 
 func (m *mockConcurrentlyConsumer) Consume(
-	msgs []*message.MessageExt, ctx *ConcurrentlyContext,
+	msgs []*message.Ext, ctx *ConcurrentlyContext,
 ) ConsumeConcurrentlyStatus {
 	atomic.AddInt32(&m.consumeCount, int32(len(msgs)))
 	m.wg.Done()
@@ -30,10 +30,10 @@ type mockSendback struct {
 	runSendback bool
 	sendErr     error
 
-	msgs []*message.MessageExt
+	msgs []*message.Ext
 }
 
-func (ms *mockSendback) SendBack(m *message.MessageExt, delayLevel int, broker string) error {
+func (ms *mockSendback) SendBack(m *message.Ext, delayLevel int, broker string) error {
 	ms.runSendback = true
 	ms.msgs = append(ms.msgs, m)
 	return ms.sendErr
@@ -133,8 +133,8 @@ func TestStartShutdown(t *testing.T) {
 	cs := newTestConcurrentlyService(t)
 	// expired message
 	pq := cs.newProcessQueue(&message.Queue{})
-	msgs := []*message.MessageExt{}
-	m := &message.MessageExt{}
+	msgs := []*message.Ext{}
+	m := &message.Ext{}
 	m.SetConsumeStartTimestamp(time.Now().Add(-time.Hour).UnixNano())
 	msgs = append(msgs, m)
 	pq.putMessages(msgs)
@@ -142,7 +142,7 @@ func TestStartShutdown(t *testing.T) {
 	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
 	mockConsumer.wg.Add(1)
 	// to be consumed message
-	cs.submitConsumeRequest([]*message.MessageExt{{QueueOffset: 20}}, pq, &message.Queue{QueueID: 1})
+	cs.submitConsumeRequest([]*message.Ext{{QueueOffset: 20}}, pq, &message.Queue{QueueID: 1})
 
 	cs.start()
 	time.Sleep(time.Millisecond * 10)
@@ -162,7 +162,7 @@ func TestSubmitRequestSuccess(t *testing.T) {
 	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
 	mockConsumer.wg.Add(count)
 
-	msgs := []*message.MessageExt{&message.MessageExt{}}
+	msgs := []*message.Ext{&message.Ext{}}
 	for i := 0; i < count; i++ {
 		go func() { cs.submitConsumeRequest(msgs, newProcessQueue(), nil) }()
 	}
@@ -177,7 +177,7 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 		offsetUpdater := cs.offseter.(*mockOffseter)
 		cs.messageModel = BroadCasting
 
-		msgs := []*message.MessageExt{&message.MessageExt{}}
+		msgs := []*message.Ext{&message.Ext{}}
 		pq := newProcessQueue()
 		pq.putMessages(msgs)
 
@@ -191,8 +191,8 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 		assert.True(t, offsetUpdater.runUpdate)
 
 		// two message and succcess one
-		msgs = []*message.MessageExt{
-			&message.MessageExt{QueueOffset: 1}, &message.MessageExt{QueueOffset: 2},
+		msgs = []*message.Ext{
+			&message.Ext{QueueOffset: 1}, &message.Ext{QueueOffset: 2},
 		}
 		pq = newProcessQueue()
 		pq.putMessages(msgs)
@@ -216,7 +216,7 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 		mq := &message.Queue{}
 
 		// all send back
-		msgs := []*message.MessageExt{&message.MessageExt{}}
+		msgs := []*message.Ext{&message.Ext{}}
 		pq := newProcessQueue()
 		pq.putMessages(msgs)
 		cs.processConsumeResult(
@@ -230,8 +230,8 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 		sendbacker.runSendback = false
 
 		// two message and send back ok
-		msgs = []*message.MessageExt{
-			&message.MessageExt{QueueOffset: 1}, &message.MessageExt{QueueOffset: 2},
+		msgs = []*message.Ext{
+			&message.Ext{QueueOffset: 1}, &message.Ext{QueueOffset: 2},
 		}
 		pq = newProcessQueue()
 		pq.putMessages(msgs)
@@ -284,8 +284,8 @@ func TestConsumeConcurrentlyProcessResultSuc(t *testing.T) {
 		cs.messageModel = BroadCasting
 
 		// two message and succcess one
-		msgs := []*message.MessageExt{
-			&message.MessageExt{QueueOffset: 1}, &message.MessageExt{QueueOffset: 2},
+		msgs := []*message.Ext{
+			&message.Ext{QueueOffset: 1}, &message.Ext{QueueOffset: 2},
 		}
 		pq := newProcessQueue()
 		pq.putMessages(msgs)
@@ -304,7 +304,7 @@ func TestConsumeConcurrentlyProcessResultSuc(t *testing.T) {
 		mq := &message.Queue{}
 
 		// all send back
-		msgs := []*message.MessageExt{&message.MessageExt{}}
+		msgs := []*message.Ext{&message.Ext{}}
 		pq := newProcessQueue()
 		pq.putMessages(msgs)
 		cs.processConsumeResult(
@@ -318,8 +318,8 @@ func TestConsumeConcurrentlyProcessResultSuc(t *testing.T) {
 		sendbacker.runSendback = false
 
 		// two message and send back ok
-		msgs = []*message.MessageExt{
-			&message.MessageExt{QueueOffset: 1}, &message.MessageExt{QueueOffset: 2},
+		msgs = []*message.Ext{
+			&message.Ext{QueueOffset: 1}, &message.Ext{QueueOffset: 2},
 		}
 		pq = newProcessQueue()
 		pq.putMessages(msgs)
@@ -353,14 +353,14 @@ func TestConcurrentlyProcessqueue(t *testing.T) {
 
 	// not over limit
 	pq := cs.newProcessQueue(&message.Queue{})
-	msgs := []*message.MessageExt{}
+	msgs := []*message.Ext{}
 	for i, t := 0, time.Now().Add(-time.Hour).UnixNano(); i < 10; i++ {
-		m := &message.MessageExt{QueueOffset: int64(i)}
+		m := &message.Ext{QueueOffset: int64(i)}
 		m.SetConsumeStartTimestamp(t + int64(i))
 		msgs = append(msgs, m)
 	}
 	for i, t := 0, time.Now().UnixNano(); i < 10; i++ {
-		m := &message.MessageExt{QueueOffset: int64(i + 100)}
+		m := &message.Ext{QueueOffset: int64(i + 100)}
 		m.SetConsumeStartTimestamp(t)
 		msgs = append(msgs, m)
 	}
@@ -377,7 +377,7 @@ func TestConcurrentlyProcessqueue(t *testing.T) {
 	sendbacker.msgs = nil
 	msgs = msgs[0:10]
 	for i, t := 0, time.Now().Add(-time.Hour).UnixNano(); i < 10; i++ {
-		m := &message.MessageExt{QueueOffset: int64(i + 1000)}
+		m := &message.Ext{QueueOffset: int64(i + 1000)}
 		m.SetConsumeStartTimestamp(t + int64(i))
 		msgs = append(msgs, m)
 	}
@@ -399,7 +399,7 @@ func TestConcurrentSubmitLater(t *testing.T) {
 	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
 	mockConsumer.wg.Add(count)
 
-	msgs := []*message.MessageExt{&message.MessageExt{}}
+	msgs := []*message.Ext{&message.Ext{}}
 	for i := 0; i < count; i++ {
 		go func() {
 			cs.submitConsumeRequestLater(&consumeConcurrentlyRequest{

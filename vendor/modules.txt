@@ -1,5 +1,10 @@
 # github.com/davecgh/go-spew v1.1.0
 github.com/davecgh/go-spew/spew
+# github.com/klauspost/compress v1.4.1
+github.com/klauspost/compress/zlib
+github.com/klauspost/compress/flate
+# github.com/klauspost/cpuid v1.2.0
+github.com/klauspost/cpuid
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
 # github.com/stretchr/testify v1.3.0

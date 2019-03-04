@@ -184,7 +184,7 @@ func (c *PullConsumer) pullSync(
 		return pr, nil
 	}
 
-	filterMsgs := make([]*message.MessageExt, 0, len(pr.Messages))
+	filterMsgs := make([]*message.Ext, 0, len(pr.Messages))
 	for _, m := range pr.Messages {
 		tag := m.GetTags()
 		if tag == "" {
@@ -228,7 +228,7 @@ func (c *PullConsumer) RunningInfo() client.RunningInfo {
 
 // SendBack send back message
 func (c *PullConsumer) SendBack(
-	m *message.MessageExt, delayLevel int32, group, brokerName string,
+	m *message.Ext, delayLevel int32, group, brokerName string,
 ) error {
 	if group == "" {
 		group = c.GroupName

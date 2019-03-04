@@ -7,4 +7,5 @@ var (
 	errEmptyTopic   = errors.New("empty topic")
 	errEmptyBody    = errors.New("empty body")
 	errNoRouters    = errors.New("no routers")
+	errLargeBody    = errors.New("large body")
 )

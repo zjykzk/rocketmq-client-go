@@ -4,21 +4,33 @@ import (
 	"bytes"
 	"math/rand"
 	"strconv"
+	"time"
 
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
 var (
-	latencyMax           = [...]int32{50, 100, 550, 1000, 2000, 3000, 15000}
-	notAvailableDuration = [...]int32{0, 0, 30000, 60000, 120000, 180000, 600000}
+	latencyMax           = [...]time.Duration{50, 100, 550, 1000, 2000, 3000, 15000}      //millis
+	notAvailableDuration = [...]time.Duration{0, 0, 30000, 60000, 120000, 180000, 600000} //millis
 )
+
+func init() {
+	// fix the max latency and not available duration
+	for i := range latencyMax {
+		latencyMax[i] *= time.Millisecond
+	}
+
+	for i := range notAvailableDuration {
+		notAvailableDuration[i] *= time.Millisecond
+	}
+}
 
 type topicRouter interface {
 	SelectOneQueue() *message.Queue
 	NextQueueIndex() uint32
 	MessageQueues() []*message.Queue
-	WriteCount(broker string) int
-	SelectOneQueueHint(lastBroker string) *message.Queue
+	WriteQueueCount(broker string) int
+	SelectOneQueueNotOf(lastBroker string) *message.Queue
 }
 
 // MQFaultStrategy the strategy of fault
@@ -39,9 +51,9 @@ func NewMQFaultStrategy(sendEnable bool) *MQFaultStrategy {
 }
 
 // SelectOneQueue select one message queue to send message
-func (s *MQFaultStrategy) SelectOneQueue(tp topicRouter, broker string) *message.Queue {
+func (s *MQFaultStrategy) SelectOneQueue(tp topicRouter, exculdedBroker string) *message.Queue {
 	if !s.sendLatencyFaultEnable {
-		return tp.SelectOneQueueHint(broker)
+		return tp.SelectOneQueueNotOf(exculdedBroker)
 	}
 
 	i, queues := tp.NextQueueIndex(), tp.MessageQueues()
@@ -54,45 +66,45 @@ func (s *MQFaultStrategy) SelectOneQueue(tp topicRouter, broker string) *message
 			continue
 		}
 
-		if "" == broker || q.BrokerName != broker {
+		if "" == exculdedBroker || q.BrokerName != exculdedBroker {
 			return q
 		}
 	}
 
-	wc := tp.WriteCount(broker)
+	wc := tp.WriteQueueCount(exculdedBroker)
 	if wc <= 0 {
-		s.faultLatency.Remove(broker)
-		return tp.SelectOneQueueHint(broker)
+		s.faultLatency.Remove(exculdedBroker)
+		return tp.SelectOneQueueNotOf(exculdedBroker)
 	}
 
-	b, ok := s.faultLatency.PickOneAtLeast()
+	notBestBroker, ok := s.faultLatency.PickOneAtLeast()
 	if !ok {
-		return tp.SelectOneQueueHint(broker)
+		return tp.SelectOneQueueNotOf(exculdedBroker)
 	}
 
 	q := tp.SelectOneQueue()
 	return &message.Queue{
-		BrokerName: b,
+		BrokerName: notBestBroker,
 		Topic:      q.Topic,
 		QueueID:    uint8(tp.NextQueueIndex() % uint32(wc)),
 	}
 }
 
 // UpdateFault update the latency
-func (s *MQFaultStrategy) UpdateFault(broker string, latency int64, isolation bool) {
+func (s *MQFaultStrategy) UpdateFault(broker string, latency time.Duration, isolation bool) {
 	if !s.sendLatencyFaultEnable {
 		return
 	}
 
-	newLatency := int32(latency)
+	newLatency := latency
 	if isolation {
-		newLatency = 30000
+		newLatency = 30 * time.Second
 	}
 
-	duration := int64(0)
+	var duration time.Duration
 	for i := len(latencyMax) - 1; i >= 0; i-- {
-		if newLatency > latencyMax[i] {
-			duration = int64(notAvailableDuration[i])
+		if newLatency >= latencyMax[i] {
+			duration = notAvailableDuration[i]
 			break
 		}
 	}

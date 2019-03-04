@@ -2,7 +2,6 @@ package producer
 
 import (
 	"fmt"
-	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -20,9 +19,10 @@ type topicPublishInfo struct {
 }
 
 func (p *topicPublishInfo) String() string {
-	return fmt.Sprintf("TopicPublishInfo [orderTopic="+strconv.FormatBool(p.orderTopic)+
-		", messageQueueList=%v, sendWhichQueue=%v, haveTopicRouterInfo="+
-		strconv.FormatBool(p.haveTopicRouterInfo)+"]", p.queues, p.router)
+	return fmt.Sprintf(
+		"TopicPublishInfo [orderTopic=%t, messageQueueList=%v, sendWhichQueue=%v, haveTopicRouterInfo=%t]",
+		p.orderTopic, p.queues, p.router, p.haveTopicRouterInfo,
+	)
 }
 
 func (p *topicPublishInfo) SelectOneQueue() *message.Queue {
@@ -37,7 +37,7 @@ func (p *topicPublishInfo) MessageQueues() []*message.Queue {
 	return p.queues
 }
 
-func (p *topicPublishInfo) WriteCount(broker string) int {
+func (p *topicPublishInfo) WriteQueueCount(broker string) int {
 	for _, q := range p.router.Queues {
 		if q.BrokerName == broker {
 			return q.WriteCount
@@ -48,7 +48,7 @@ func (p *topicPublishInfo) WriteCount(broker string) int {
 
 // SelectOneQueueHint select the broker whose name is not the excludeBroker
 // if not found,  select one randomly
-func (p *topicPublishInfo) SelectOneQueueHint(excludeBroker string) *message.Queue {
+func (p *topicPublishInfo) SelectOneQueueNotOf(excludeBroker string) *message.Queue {
 	if excludeBroker == "" {
 		return p.SelectOneQueue()
 	}

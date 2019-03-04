@@ -64,7 +64,7 @@ func (r *mockRPC) DeleteTopicInNamesrv(addr, topic string, timeout time.Duration
 func (r *mockRPC) GetBrokerClusterInfo(addr string, timeout time.Duration) (*route.ClusterInfo, error) {
 	return nil, nil
 }
-func (r *mockRPC) QueryMessageByOffset(addr string, offset int64, timeout time.Duration) (*message.MessageExt, error) {
+func (r *mockRPC) QueryMessageByOffset(addr string, offset int64, timeout time.Duration) (*message.Ext, error) {
 	return nil, nil
 }
 func (r *mockRPC) MaxOffset(addr, topic string, queueID uint8, timeout time.Duration) (int64, *remote.RPCError) {

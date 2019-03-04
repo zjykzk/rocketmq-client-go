@@ -36,7 +36,7 @@ type PullResult struct {
 	NextBeginOffset int64
 	MinOffset       int64
 	MaxOffset       int64
-	Messages        []*message.MessageExt
+	Messages        []*message.Ext
 	Status          PullStatus
 }
 

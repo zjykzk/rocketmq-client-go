@@ -145,7 +145,7 @@ type PullResponse struct {
 	NextBeginOffset int64
 	MinOffset       int64
 	MaxOffset       int64
-	Messages        []*message.MessageExt
+	Messages        []*message.Ext
 	SuggestBrokerID int64
 }
 
@@ -207,7 +207,7 @@ func (h queryMessageByIDHeader) ToMap() map[string]string {
 
 // QueryMessageByOffset querys the message by message id
 func (r *RPC) QueryMessageByOffset(addr string, offset int64, to time.Duration) (
-	*message.MessageExt, error,
+	*message.Ext, error,
 ) {
 	h := queryMessageByIDHeader(offset)
 	cmd, err := r.client.RequestSync(addr, remote.NewCommand(ViewMessageByID, h), to)

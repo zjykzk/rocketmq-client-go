@@ -7,7 +7,7 @@ type EmptyMQClient struct{}
 func (c *EmptyMQClient) Start() error { return nil }
 func (c *EmptyMQClient) Shutdown()    {}
 
-func (c *EmptyMQClient) RegisterProducer(p producer) error                   { return nil }
+func (c *EmptyMQClient) RegisterProducer(p Producer) error                   { return nil }
 func (c *EmptyMQClient) UnregisterProducer(group string)                     {}
 func (c *EmptyMQClient) RegisterConsumer(co consumer) error                  { return nil }
 func (c *EmptyMQClient) UnregisterConsumer(group string)                     {}

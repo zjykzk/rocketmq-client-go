@@ -85,11 +85,11 @@ func (r *mockConsumerRPC) PullMessageSync(
 		NextBeginOffset: 2,
 		MinOffset:       1,
 		MaxOffset:       3,
-		Messages: []*message.MessageExt{
-			&message.MessageExt{
+		Messages: []*message.Ext{
+			&message.Ext{
 				Message: message.Message{Properties: map[string]string{message.PropertyTags: "t1"}},
 			},
-			&message.MessageExt{
+			&message.Ext{
 				Message: message.Message{Properties: map[string]string{message.PropertyTags: "t2"}},
 			},
 		},
@@ -147,10 +147,10 @@ func (r *mockConsumerRPC) SearchOffsetByTimestamp(addr, broker, topic string, qu
 
 func testSendback(c *PullConsumer, t *testing.T) {
 	msgID := "bad message"
-	assert.NotNil(t, c.SendBack(&message.MessageExt{MsgID: msgID}, -1, "", ""))
+	assert.NotNil(t, c.SendBack(&message.Ext{MsgID: msgID}, -1, "", ""))
 
 	msgID = "0AC8145700002A9F00000000006425A2"
-	msg := &message.MessageExt{MsgID: msgID}
+	msg := &message.Ext{MsgID: msgID}
 	err := c.SendBack(msg, -1, "", "mock addr")
 	assert.Nil(t, err)
 }

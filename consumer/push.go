@@ -151,7 +151,7 @@ func (pc *PushConsumer) shutdown() {
 
 // SendBack sends the message to the broker, the message will be consumed again after the at
 // least time specified by the delayLevel
-func (pc *PushConsumer) SendBack(m *message.MessageExt, delayLevel int, broker string) error {
+func (pc *PushConsumer) SendBack(m *message.Ext, delayLevel int, broker string) error {
 	return nil //TODO
 }
 

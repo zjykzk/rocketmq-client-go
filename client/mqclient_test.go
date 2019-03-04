@@ -86,7 +86,7 @@ func TestMQClient(t *testing.T) {
 		mc := &mockConsumer{"c0"}
 		client1.RegisterConsumer(mc)
 
-		hd := client1.(*mqClient).prepareHeartbeatData()
+		hd := client1.prepareHeartbeatData()
 		assert.Equal(t, "clientid", hd.ClientID)
 		assert.Equal(t, 1, len(hd.Consumers))
 		assert.Equal(t, 2, len(hd.Producers))
@@ -109,55 +109,53 @@ func TestMQClient(t *testing.T) {
 	})
 
 	t.Run("broker addr", func(t *testing.T) {
-		impl := client.(*mqClient)
-		impl.brokerAddrs.put("b1", map[int32]string{0: "master", 2: "slave"})
-		impl.brokerAddrs.put("b2", map[int32]string{0: "master2", 2: "slave"})
-		assert.Equal(t, "master", impl.GetMasterBrokerAddr("b1"))
-		ms := impl.GetMasterBrokerAddrs()
+		client.brokerAddrs.put("b1", map[int32]string{0: "master", 2: "slave"})
+		client.brokerAddrs.put("b2", map[int32]string{0: "master2", 2: "slave"})
+		assert.Equal(t, "master", client.GetMasterBrokerAddr("b1"))
+		ms := client.GetMasterBrokerAddrs()
 		sort.Strings(ms)
 		assert.Equal(t, []string{"master", "master2"}, ms)
 
-		r, err := impl.FindBrokerAddr("b1", 0, false)
+		r, err := client.FindBrokerAddr("b1", 0, false)
 		if err != nil {
 			t.Fatal(err)
 		}
 		assert.Equal(t, "master", r.Addr)
 		assert.False(t, r.IsSlave)
 
-		_, err = impl.FindBrokerAddr("b1", 3, false)
+		_, err = client.FindBrokerAddr("b1", 3, false)
 		assert.Nil(t, err)
-		_, err = impl.FindBrokerAddr("b1", 3, true)
+		_, err = client.FindBrokerAddr("b1", 3, true)
 		assert.NotNil(t, err)
-		_, err = impl.FindBrokerAddr("b0", 3, true)
+		_, err = client.FindBrokerAddr("b0", 3, true)
 		assert.NotNil(t, err)
 	})
 
 	t.Run("update topic router from namesrv", func(t *testing.T) {
-		impl := client.(*mqClient)
 		mockRemoteClient := &mockRemoteClient{}
-		impl.Client = mockRemoteClient
+		client.Client = mockRemoteClient
 
 		// bad request
 		mockRemoteClient.requestSyncErr = errors.New("bad request")
-		updated, err := impl.updateTopicRouterInfoFromNamesrv("t")
+		updated, err := client.updateTopicRouterInfoFromNamesrv("t")
 		assert.False(t, updated)
 		assert.NotNil(t, err)
 		mockRemoteClient.requestSyncErr = nil
 
 		// add
 		mockRemoteClient.command.Body = []byte(`{}`)
-		updated, err = impl.updateTopicRouterInfoFromNamesrv("t")
+		updated, err = client.updateTopicRouterInfoFromNamesrv("t")
 		assert.Nil(t, err)
 		assert.True(t, updated)
-		assert.Equal(t, []string{"t"}, impl.routersOfTopic.Topics())
+		assert.Equal(t, []string{"t"}, client.routersOfTopic.Topics())
 
 		// no updated
-		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
+		updated, _ = client.updateTopicRouterInfoFromNamesrv("t")
 		assert.False(t, updated)
 
 		// change
 		mockRemoteClient.command.Body = []byte(`{"OrderTopicConf":"new"}`)
-		updated, _ = impl.updateTopicRouterInfoFromNamesrv("t")
+		updated, _ = client.updateTopicRouterInfoFromNamesrv("t")
 		assert.True(t, updated)
 	})
 }

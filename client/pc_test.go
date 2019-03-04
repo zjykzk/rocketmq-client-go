@@ -28,7 +28,7 @@ func (mp *mockProducer) NeedUpdateTopicPublish(topic string) bool {
 
 func TestProducerColl(t *testing.T) {
 	group := "g1"
-	pc := producerColl{eles: make(map[string]producer)}
+	pc := producerColl{eles: make(map[string]Producer)}
 	prev, suc := pc.putIfAbsent(group, &mockProducer{group})
 	assert.Nil(t, prev)
 	assert.True(t, suc)
@@ -37,7 +37,7 @@ func TestProducerColl(t *testing.T) {
 	assert.NotNil(t, prev)
 	assert.False(t, suc)
 
-	assert.Equal(t, []producer{&mockProducer{group}}, pc.coll())
+	assert.Equal(t, []Producer{&mockProducer{group}}, pc.coll())
 	assert.True(t, pc.contains(group))
 	assert.Equal(t, 1, pc.size())
 

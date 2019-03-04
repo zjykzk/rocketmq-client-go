@@ -178,7 +178,7 @@ func (a *Admin) GetBrokerClusterInfo() (info *route.ClusterInfo, err error) {
 }
 
 // QueryMessageByID querys the message by message id
-func (a *Admin) QueryMessageByID(id string) (*message.MessageExt, error) {
+func (a *Admin) QueryMessageByID(id string) (*message.Ext, error) {
 	addr, offset, err := message.ParseMessageID(id)
 	if err != nil {
 		return nil, err

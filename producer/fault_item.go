@@ -11,22 +11,20 @@ import (
 )
 
 type faultItem struct {
-	name                string
-	latencyMillis       int64
-	availableTimeMillis int64
+	name          string
+	latency       time.Duration
+	availableTime time.Time
 }
 
 func (i *faultItem) String() string {
-	return fmt.Sprintf("faultItem:[name=%s,latencyMillis=%v,availableTimeMillis=%v]",
-		i.name, i.latencyMillis, i.availableTimeMillis)
+	return fmt.Sprintf(
+		"faultItem:[name=%s,latency=%v,availableTime=%v]",
+		i.name, i.latency, i.availableTime,
+	)
 }
 
 func (i *faultItem) available() bool {
-	return unixMillis() >= i.availableTimeMillis
-}
-
-func unixMillis() int64 {
-	return time.Now().UnixNano() / int64(time.Millisecond)
+	return !time.Now().Before(i.availableTime)
 }
 
 func (i *faultItem) less(o *faultItem) bool {
@@ -38,20 +36,14 @@ func (i *faultItem) less(o *faultItem) bool {
 		return false
 	}
 
-	if i.latencyMillis < o.latencyMillis {
-		return true
-	} else if i.latencyMillis > o.latencyMillis {
-		return false
-	}
-
 	switch {
-	case i.latencyMillis < o.latencyMillis:
+	case i.latency < o.latency:
 		return true
-	case i.latencyMillis > o.latencyMillis:
+	case i.latency > o.latency:
 		return false
-	case i.availableTimeMillis < o.availableTimeMillis:
+	case i.availableTime.Before(o.availableTime):
 		return true
-	case i.availableTimeMillis > o.availableTimeMillis:
+	case i.availableTime.After(o.availableTime):
 		return false
 	default:
 		return false
@@ -64,12 +56,12 @@ type faultColl struct {
 	whereItemWorst uint32
 }
 
-func (fc *faultColl) UpdateFault(name string, latencyMillis, notAvailableDurationMillis int64) {
+func (fc *faultColl) UpdateFault(name string, latency, notAvailableDuration time.Duration) {
 	fc.Lock()
 	fc.coll[name] = &faultItem{
-		name:                name,
-		latencyMillis:       latencyMillis,
-		availableTimeMillis: unixMillis() + notAvailableDurationMillis,
+		name:          name,
+		latency:       latency,
+		availableTime: time.Now().Add(notAvailableDuration),
 	}
 	fc.Unlock()
 }
