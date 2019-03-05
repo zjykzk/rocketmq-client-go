@@ -465,7 +465,7 @@ func (c *MqClient) prepareHeartbeatData() *rpc.HeartbeatRequest {
 	}
 }
 
-func toRPCSubscriptionDatas(datas []*Data) []*rpc.Data {
+func toRPCSubscriptionDatas(datas []*SubscribeData) []*rpc.Data {
 	subscriptionDatas := make([]*rpc.Data, len(datas))
 	for i, d := range datas {
 		subscriptionDatas[i] = (*rpc.Data)(d)

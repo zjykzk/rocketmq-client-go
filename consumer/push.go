@@ -117,6 +117,10 @@ func NewConcurrentConsumer(
 }
 
 func (pc *PushConsumer) start() error {
+	// TODO
+	// check group
+	// check config
+
 	pc.Logger.Info("start pull consumer")
 	if pc.GroupName == "" {
 		return errors.New("start push consumer error:empty group")
@@ -138,6 +142,12 @@ func (pc *PushConsumer) start() error {
 		logger:        pc.Logger,
 	})
 
+	// TODO
+	// register subscriptaion & retry topic
+	// update topic subscibe info when subscription changed
+	// check client in broker
+	// shend heart beat
+	// reblance immediately
 	pc.Logger.Infof("start pull consumer:%s success", pc.GroupName)
 	return nil
 }

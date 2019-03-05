@@ -39,7 +39,7 @@ func TestUpdateTopicSubscribe(t *testing.T) {
 	c.UpdateTopicSubscribe(topic, nil)
 	assert.Equal(t, 0, len(c.topicRouters.Routers()))
 
-	c.subscribeData.Put(topic, &client.Data{})
+	c.subscribeData.Put(topic, &client.SubscribeData{})
 	assert.True(t, c.NeedUpdateTopicSubscribe("test"))
 
 	c.UpdateTopicSubscribe(topic, &route.TopicRouter{

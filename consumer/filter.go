@@ -14,8 +14,8 @@ const (
 )
 
 // BuildSubscribeData build the subscribe data
-func BuildSubscribeData(group, topic, expr string) *client.Data {
-	d := &client.Data{Topic: topic, Expr: expr}
+func BuildSubscribeData(group, topic, expr string) *client.SubscribeData {
+	d := &client.SubscribeData{Topic: topic, Expr: expr}
 	if expr == "" {
 		d.Expr = subAll
 		return d

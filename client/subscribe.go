@@ -61,8 +61,8 @@ func (t *QueueTable) Delete(topic string) []*message.Queue {
 	return prev
 }
 
-// Data subscription information
-type Data struct {
+// SubscribeData subscription information
+type SubscribeData struct {
 	Topic   string   `json:"topic"`
 	Expr    string   `json:"subString"`
 	Typ     string   `json:"expressionType"`
@@ -72,7 +72,7 @@ type Data struct {
 }
 
 // Equal returns true if equals another, otherwise false
-func (s *Data) Equal(o *Data) bool {
+func (s *SubscribeData) Equal(o *SubscribeData) bool {
 	if s.Topic != o.Topic {
 		return false
 	}
@@ -112,27 +112,27 @@ func (s *Data) Equal(o *Data) bool {
 	return true
 }
 
-func (s *Data) String() string {
+func (s *SubscribeData) String() string {
 	return fmt.Sprintf("SubscribeData [topic=%s,expr=%s,type=%s,tags=%v,codes=%v,version=%d]",
 		s.Topic, s.Expr, s.Typ, s.Tags, s.Codes, s.Version)
 }
 
-// DataTable contains the subscription information of topic, the operations is thread-safe
+// SubscribeDataTable contains the subscription information of topic, the operations is thread-safe
 // NOTE: donot modify directly
-type DataTable struct {
+type SubscribeDataTable struct {
 	locker sync.RWMutex
-	table  map[string]*Data // key: topic
+	table  map[string]*SubscribeData // key: topic
 }
 
 // NewDataTable creates one DataTable
-func NewDataTable() *DataTable {
-	return &DataTable{
-		table: make(map[string]*Data, 8),
+func NewDataTable() *SubscribeDataTable {
+	return &SubscribeDataTable{
+		table: make(map[string]*SubscribeData, 8),
 	}
 }
 
 // Put stores the subcribe data and returns the previous one
-func (t *DataTable) Put(topic string, d *Data) *Data {
+func (t *SubscribeDataTable) Put(topic string, d *SubscribeData) *SubscribeData {
 	t.locker.Lock()
 	prev := t.table[topic]
 	t.table[topic] = d
@@ -141,7 +141,7 @@ func (t *DataTable) Put(topic string, d *Data) *Data {
 }
 
 // PutIfAbsent stores the subcribe data and returns the previous one
-func (t *DataTable) PutIfAbsent(topic string, d *Data) *Data {
+func (t *SubscribeDataTable) PutIfAbsent(topic string, d *SubscribeData) *SubscribeData {
 	t.locker.Lock()
 	prev, ok := t.table[topic]
 	if !ok {
@@ -152,7 +152,7 @@ func (t *DataTable) PutIfAbsent(topic string, d *Data) *Data {
 }
 
 // Get returns the subcribe data of the topic
-func (t *DataTable) Get(topic string) *Data {
+func (t *SubscribeDataTable) Get(topic string) *SubscribeData {
 	t.locker.RLock()
 	d := t.table[topic]
 	t.locker.RUnlock()
@@ -160,7 +160,7 @@ func (t *DataTable) Get(topic string) *Data {
 }
 
 // Topics returns the topics
-func (t *DataTable) Topics() []string {
+func (t *SubscribeDataTable) Topics() []string {
 	i := 0
 	t.locker.RLock()
 	topics := make([]string, len(t.table))
@@ -173,10 +173,10 @@ func (t *DataTable) Topics() []string {
 }
 
 // Datas returns the subscribed datas
-func (t *DataTable) Datas() []*Data {
+func (t *SubscribeDataTable) Datas() []*SubscribeData {
 	i := 0
 	t.locker.RLock()
-	datas := make([]*Data, len(t.table))
+	datas := make([]*SubscribeData, len(t.table))
 	for _, d := range t.table {
 		datas[i] = d
 		i++
@@ -186,7 +186,7 @@ func (t *DataTable) Datas() []*Data {
 }
 
 // Delete deletes the data of the specified topic, and return the previous one
-func (t *DataTable) Delete(topic string) *Data {
+func (t *SubscribeDataTable) Delete(topic string) *SubscribeData {
 	t.locker.Lock()
 	prev, ok := t.table[topic]
 	if ok {

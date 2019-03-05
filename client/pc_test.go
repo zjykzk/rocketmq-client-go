@@ -74,7 +74,7 @@ func (mc *mockConsumer) Type() string {
 func (mc *mockConsumer) UnitMode() bool {
 	return false
 }
-func (mc *mockConsumer) Subscriptions() []*Data {
+func (mc *mockConsumer) Subscriptions() []*SubscribeData {
 	return nil
 }
 func (mc *mockConsumer) ReblanceQueue() {}

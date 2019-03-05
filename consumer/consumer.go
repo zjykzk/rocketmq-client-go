@@ -69,7 +69,7 @@ type consumer struct {
 	MessageQueueChanged MessageQueueChanger
 
 	subscribeQueues *client.QueueTable
-	subscribeData   *client.DataTable
+	subscribeData   *client.SubscribeDataTable
 	topicRouters    *route.TopicRouterTable
 	reblancer       messageQueueReblancer
 	assigner        queueAssigner
@@ -90,13 +90,17 @@ type consumer struct {
 
 // Start the works of consumer
 func (c *consumer) start() (err error) {
+	// TODO
+	// check group
+	// check config
+
 	c.ClientIP, err = rocketmq.GetIPStr()
 	if err != nil {
 		c.Logger.Errorf("no ip")
 		return
 	}
 
-	if c.MessageModel == Clustering {
+	if c.MessageModel == Clustering && c.InstanceName == defaultInstanceName {
 		c.InstanceName = strconv.Itoa(os.Getpid())
 	}
 
@@ -245,7 +249,7 @@ func (c *consumer) UnitMode() bool {
 	return c.IsUnitMode
 }
 
-func (c *consumer) Subscriptions() []*client.Data {
+func (c *consumer) Subscriptions() []*client.SubscribeData {
 	return c.subscribeData.Datas()
 }
 

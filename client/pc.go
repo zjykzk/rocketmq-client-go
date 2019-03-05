@@ -64,7 +64,7 @@ func (pc *producerColl) size() int {
 // RunningInfo consumer running information
 type RunningInfo struct {
 	Properties    map[string]string `json:"properties"`
-	Subscriptions []*Data           `json:"subscriptionSet"`
+	Subscriptions []*SubscribeData  `json:"subscriptionSet"`
 	// MQTable map[string]*ProcessQueueInfo TODO
 	// Statuses map[string]ConsumerStatus TODO
 }
@@ -79,7 +79,7 @@ type Consumer interface {
 	Model() string
 	Type() string
 	UnitMode() bool
-	Subscriptions() []*Data
+	Subscriptions() []*SubscribeData
 	ReblanceQueue()
 	RunningInfo() RunningInfo
 }

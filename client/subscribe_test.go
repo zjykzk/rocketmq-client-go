@@ -9,10 +9,10 @@ import (
 )
 
 func TestData(t *testing.T) {
-	sq := Data{}
+	sq := SubscribeData{}
 	assert.True(t, sq.Equal(&sq))
 
-	sq1 := Data{Topic: "t"}
+	sq1 := SubscribeData{Topic: "t"}
 	assert.True(t, !sq.Equal(&sq1))
 
 	sq = sq1
@@ -47,7 +47,7 @@ func TestData(t *testing.T) {
 func TestDataTable(t *testing.T) {
 	dt := NewDataTable()
 
-	prev := dt.Put("topic", &Data{})
+	prev := dt.Put("topic", &SubscribeData{})
 	assert.Nil(t, prev)
 
 	prev = dt.PutIfAbsent("topic", nil)
