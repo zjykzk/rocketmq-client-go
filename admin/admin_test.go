@@ -9,10 +9,9 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote"
-	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -35,7 +34,7 @@ func TestAdmin(t *testing.T) {
 	assert.True(t, a.InstanceName != "")
 	assert.True(t, a.ClientIP != "")
 
-	rpc, client := a.rpc, a.client
+	client := a.client
 	t.Run("maxoffset", func(t *testing.T) {
 		testMaxoffset(a, t)
 	})
@@ -43,41 +42,16 @@ func TestAdmin(t *testing.T) {
 		createTopicOrUpdate(a, t)
 	})
 
-	a.rpc, a.client = rpc, client
+	a.client = client
 	a.Shutdown()
 	assert.Equal(t, 0, a.client.AdminCount())
-}
-
-type mockRPC struct {
-	createTopicErrorCount int
-}
-
-func (r *mockRPC) CreateOrUpdateTopic(addr string, header *rpc.CreateOrUpdateTopicHeader, to time.Duration) error {
-	if r.createTopicErrorCount == 0 {
-		return nil
-	}
-	r.createTopicErrorCount--
-	return errors.New("waiting")
-}
-func (r *mockRPC) DeleteTopicInBroker(addr, topic string, timeout time.Duration) error  { return nil }
-func (r *mockRPC) DeleteTopicInNamesrv(addr, topic string, timeout time.Duration) error { return nil }
-func (r *mockRPC) GetBrokerClusterInfo(addr string, timeout time.Duration) (*route.ClusterInfo, error) {
-	return nil, nil
-}
-func (r *mockRPC) QueryMessageByOffset(addr string, offset int64, timeout time.Duration) (*message.Ext, error) {
-	return nil, nil
-}
-func (r *mockRPC) MaxOffset(addr, topic string, queueID uint8, timeout time.Duration) (int64, *remote.RPCError) {
-	return maxOffset, nil
-}
-func (r *mockRPC) GetConsumerIDs(addr, group string, timeout time.Duration) ([]string, error) {
-	return nil, nil
 }
 
 type mockMQClient struct {
 	*client.EmptyMQClient
 
-	mockBrokerAddrs map[string]string
+	mockBrokerAddrs       map[string]string
+	createTopicErrorCount int
 }
 
 func (c *mockMQClient) FindBrokerAddr(broker string, hintID int32, lock bool) (
@@ -95,9 +69,33 @@ func (c *mockMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
 	c.mockBrokerAddrs[broker] = "mock address"
 	return nil
 }
+func (c *mockMQClient) CreateOrUpdateTopic(addr string, header *rpc.CreateOrUpdateTopicHeader, to time.Duration) error {
+	if c.createTopicErrorCount == 0 {
+		return nil
+	}
+	c.createTopicErrorCount--
+	return errors.New("waiting")
+}
+func (c *mockMQClient) DeleteTopicInBroker(addr, topic string, timeout time.Duration) error {
+	return nil
+}
+func (c *mockMQClient) DeleteTopicInNamesrv(addr, topic string, timeout time.Duration) error {
+	return nil
+}
+func (c *mockMQClient) GetBrokerClusterInfo(addr string, timeout time.Duration) (*route.ClusterInfo, error) {
+	return nil, nil
+}
+func (c *mockMQClient) QueryMessageByOffset(addr string, offset int64, timeout time.Duration) (*message.Ext, error) {
+	return nil, nil
+}
+func (c *mockMQClient) MaxOffset(addr, topic string, queueID uint8, timeout time.Duration) (int64, *rpc.Error) {
+	return maxOffset, nil
+}
+func (c *mockMQClient) GetConsumerIDs(addr, group string, timeout time.Duration) ([]string, error) {
+	return nil, nil
+}
 
 func testMaxoffset(a *Admin, t *testing.T) {
-	a.rpc = &mockRPC{}
 	a.client = &mockMQClient{
 		mockBrokerAddrs: make(map[string]string),
 	}
@@ -107,12 +105,12 @@ func testMaxoffset(a *Admin, t *testing.T) {
 }
 
 func createTopicOrUpdate(a *Admin, t *testing.T) {
-	a.rpc = &mockRPC{createTopicErrorCount: 0}
+	a.client = &mockMQClient{createTopicErrorCount: 0}
 	assert.Nil(t, a.CreateOrUpdateTopic("", "", 0, 1))
 
-	a.rpc = &mockRPC{createTopicErrorCount: 3}
+	a.client = &mockMQClient{createTopicErrorCount: 3}
 	assert.Nil(t, a.CreateOrUpdateTopic("", "", 0, 1))
 
-	a.rpc = &mockRPC{createTopicErrorCount: 6}
+	a.client = &mockMQClient{createTopicErrorCount: 6}
 	assert.NotNil(t, a.CreateOrUpdateTopic("", "", 0, 1))
 }

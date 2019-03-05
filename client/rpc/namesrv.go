@@ -10,28 +10,28 @@ import (
 )
 
 // DeleteTopicInNamesrv delete topic in the broker
-func (r *RPC) DeleteTopicInNamesrv(addr, topic string, to time.Duration) (err error) {
+func DeleteTopicInNamesrv(client remote.Client, addr, topic string, to time.Duration) (err error) {
 	h := deleteTopicHeader(topic)
-	cmd, err := r.client.RequestSync(addr, remote.NewCommand(DeleteTopicInNamesrv, h), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(DeleteTopicInNamesrvCode, h), to)
 	if err != nil {
-		return remote.RequestError(err)
+		return requestError(err)
 	}
 
 	if cmd.Code != Success {
-		return remote.BrokerError(cmd)
+		return brokerError(cmd)
 	}
 	return
 }
 
 // GetBrokerClusterInfo get the cluster info from the namesrv
-func (r *RPC) GetBrokerClusterInfo(addr string, to time.Duration) (*route.ClusterInfo, error) {
-	cmd, err := r.client.RequestSync(addr, remote.NewCommand(GetBrokerClusterInfo, nil), to)
+func GetBrokerClusterInfo(client remote.Client, addr string, to time.Duration) (*route.ClusterInfo, error) {
+	cmd, err := client.RequestSync(addr, remote.NewCommand(GetBrokerClusterInfoCode, nil), to)
 	if err != nil {
 		return nil, err
 	}
 
 	if cmd.Code != Success {
-		return nil, remote.BrokerError(cmd)
+		return nil, brokerError(cmd)
 	}
 
 	info := &route.ClusterInfo{}
@@ -45,7 +45,7 @@ func (r *RPC) GetBrokerClusterInfo(addr string, to time.Duration) (*route.Cluste
 	bodyjson = strings.Replace(bodyjson, "{1:", "{\"1\":", -1)
 	err = json.Unmarshal([]byte(bodyjson), info)
 	if err != nil {
-		err = remote.DataError(err)
+		err = dataError(err)
 	}
 	return info, err
 }
@@ -58,16 +58,16 @@ func (h getTopicRouteInfoHeader) ToMap() map[string]string {
 
 // GetTopicRouteInfo returns the topic information.
 func GetTopicRouteInfo(client remote.Client, addr string, topic string, to time.Duration) (
-	router *route.TopicRouter, err *remote.RPCError,
+	router *route.TopicRouter, err *Error,
 ) {
 	h := getTopicRouteInfoHeader(topic)
 	cmd, e := client.RequestSync(addr, remote.NewCommand(GetRouteintoByTopic, h), to)
 	if e != nil {
-		return nil, remote.RequestError(e)
+		return nil, requestError(e)
 	}
 
 	if cmd.Code != Success {
-		return nil, remote.BrokerError(cmd)
+		return nil, brokerError(cmd)
 	}
 
 	if len(cmd.Body) == 0 {
@@ -80,7 +80,7 @@ func GetTopicRouteInfo(client remote.Client, addr string, topic string, to time.
 	bodyjson = strings.Replace(bodyjson, "{0:", "{\"0\":", -1)
 	bodyjson = strings.Replace(bodyjson, "{1:", "{\"1\":", -1)
 	if e = json.Unmarshal([]byte(bodyjson), router); e != nil {
-		return nil, remote.DataError(e)
+		return nil, dataError(e)
 	}
 	return
 }

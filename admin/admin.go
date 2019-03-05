@@ -10,9 +10,9 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -20,10 +20,9 @@ import (
 type Admin struct {
 	rocketmq.Client
 	state    rocketmq.State
-	rpc      rpcI
 	exitChan chan int
 
-	client client.MQClient
+	client mqClient
 
 	Logger log.Logger
 }
@@ -90,7 +89,6 @@ func (a *Admin) Start() (err error) {
 	if err == nil {
 		a.state = rocketmq.StateRunning
 	}
-	a.rpc = rpc.NewRPC(a.client.RemotingClient())
 	return
 }
 
@@ -129,7 +127,7 @@ func (a *Admin) CreateOrUpdateTopic(addr, topic string, perm, queueCount int32) 
 		err error
 	)
 	for i := 0; i < 5; i++ {
-		if err = a.rpc.CreateOrUpdateTopic(addr, header, 3*time.Second); err == nil {
+		if err = a.client.CreateOrUpdateTopic(addr, header, 3*time.Second); err == nil {
 			return nil
 		}
 	}
@@ -139,7 +137,7 @@ func (a *Admin) CreateOrUpdateTopic(addr, topic string, perm, queueCount int32) 
 
 // DeleteTopicInBroker delete the topic in the broker
 func (a *Admin) DeleteTopicInBroker(addr, topic string) (err error) {
-	err = a.rpc.DeleteTopicInBroker(addr, topic, 3*time.Second)
+	err = a.client.DeleteTopicInBroker(addr, topic, 3*time.Second)
 	if err != nil {
 		a.Logger.Errorf("delete topic %s in broker:%s error:%s", topic, addr, err)
 		return
@@ -152,7 +150,7 @@ func (a *Admin) DeleteTopicInBroker(addr, topic string) (err error) {
 // DeleteTopicInAllNamesrv delete the topic in the namesrv
 func (a *Admin) DeleteTopicInAllNamesrv(topic string) (err error) {
 	for _, addr := range a.NameServerAddrs {
-		err = a.rpc.DeleteTopicInNamesrv(addr, topic, 3*time.Second)
+		err = a.client.DeleteTopicInNamesrv(addr, topic, 3*time.Second)
 		if err != nil {
 			a.Logger.Errorf("delete topic %s in namesrv:%s error:%s", topic, addr, err)
 			continue
@@ -167,7 +165,7 @@ func (a *Admin) GetBrokerClusterInfo() (info *route.ClusterInfo, err error) {
 	l := len(a.NameServerAddrs)
 	for i, c := rand.Intn(l), l; c > 0; i, c = i+1, c-1 {
 		addr := a.NameServerAddrs[i%l]
-		info, err = a.rpc.GetBrokerClusterInfo(addr, 3*time.Second)
+		info, err = a.client.GetBrokerClusterInfo(addr, 3*time.Second)
 		if err == nil {
 			return
 		}
@@ -184,7 +182,7 @@ func (a *Admin) QueryMessageByID(id string) (*message.Ext, error) {
 		return nil, err
 	}
 
-	return a.rpc.QueryMessageByOffset(addr.String(), offset, 3*time.Second)
+	return a.client.QueryMessageByOffset(addr.String(), offset, 3*time.Second)
 }
 
 // MaxOffset fetches the max offset of the consume queue
@@ -202,12 +200,12 @@ func (a *Admin) MaxOffset(q *message.Queue) (int64, error) {
 		}
 	}
 
-	return a.rpc.MaxOffset(addr.Addr, q.Topic, uint8(q.QueueID), 3*time.Second)
+	return a.client.MaxOffset(addr.Addr, q.Topic, uint8(q.QueueID), 3*time.Second)
 }
 
 // GetConsumerIDs get the consumer ids from the broker
 func (a *Admin) GetConsumerIDs(addr, group string) ([]string, error) {
-	return a.rpc.GetConsumerIDs(addr, group, time.Second*3)
+	return a.client.GetConsumerIDs(addr, group, time.Second*3)
 }
 
 // TopicFilter details

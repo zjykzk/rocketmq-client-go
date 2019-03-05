@@ -41,6 +41,10 @@ func (f *fakeMQClient) SendMessageSync(
 	return &f.sendResponse, f.sendMessageSyncErr
 }
 
+func (f *fakeMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
+	return nil
+}
+
 func TestSendHeader(t *testing.T) {
 	p := NewProducer("sendHeader", []string{"abc"}, &log.MockLogger{})
 	p.CreateTopicKey, p.DefaultTopicQueueNums = "CreateTopicKey", 100

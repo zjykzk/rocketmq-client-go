@@ -8,9 +8,9 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 )
 
 // PullConsumer consumes the messages using pulling method
@@ -135,7 +135,7 @@ func (c *PullConsumer) pullSync(
 		}
 	}
 
-	resp, err := c.rpc.PullMessageSync(
+	resp, err := c.client.PullMessageSync(
 		addr.Addr,
 		&rpc.PullHeader{
 			ConsumerGroup:        c.GroupName,
@@ -251,7 +251,7 @@ func (c *PullConsumer) SendBack(
 		}
 	}
 
-	return c.rpc.SendBack(addr, &rpc.SendBackHeader{
+	return c.client.SendBack(addr, &rpc.SendBackHeader{
 		CommitOffset:      m.CommitLogOffset,
 		Group:             group,
 		DelayLevel:        delayLevel,

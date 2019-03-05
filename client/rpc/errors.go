@@ -28,6 +28,6 @@ func responseError(cmd *remote.Command) *Error {
 	return &Error{Code: cmd.Code, Message: cmd.Remark}
 }
 
-func brokerError(cmd *remote.Command) error {
+func brokerError(cmd *remote.Command) *Error {
 	return &Error{Code: cmd.Code, Message: cmd.Remark}
 }

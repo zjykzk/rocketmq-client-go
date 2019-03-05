@@ -69,8 +69,8 @@ type RunningInfo struct {
 	// Statuses map[string]ConsumerStatus TODO
 }
 
-// consumer interface needed by reblance
-type consumer interface {
+// Consumer interface needed by reblance
+type Consumer interface {
 	Group() string
 	SubscribeTopics() []string
 	UpdateTopicSubscribe(topic string, router *route.TopicRouter)
@@ -86,12 +86,12 @@ type consumer interface {
 
 type consumerColl struct {
 	sync.RWMutex
-	eles map[string]consumer // key: group name, NOTE: donot modify directly
+	eles map[string]Consumer // key: group name, NOTE: donot modify directly
 }
 
-func (cc *consumerColl) coll() []consumer {
+func (cc *consumerColl) coll() []Consumer {
 	cc.RLock()
-	coll, i := make([]consumer, len(cc.eles)), 0
+	coll, i := make([]Consumer, len(cc.eles)), 0
 	for _, c := range cc.eles {
 		coll[i] = c
 		i++
@@ -100,7 +100,7 @@ func (cc *consumerColl) coll() []consumer {
 	return coll
 }
 
-func (cc *consumerColl) putIfAbsent(group string, c consumer) (prev consumer, suc bool) {
+func (cc *consumerColl) putIfAbsent(group string, c Consumer) (prev Consumer, suc bool) {
 	cc.Lock()
 	prev, exist := cc.eles[group]
 	if !exist {
@@ -118,7 +118,7 @@ func (cc *consumerColl) contains(group string) bool {
 	return b
 }
 
-func (cc *consumerColl) get(group string) consumer {
+func (cc *consumerColl) get(group string) Consumer {
 	cc.RLock()
 	c := cc.eles[group]
 	cc.RUnlock()
@@ -138,16 +138,17 @@ func (cc *consumerColl) size() int {
 	return sz
 }
 
-type admin interface {
+// Admin admin operation
+type Admin interface {
 	Group() string
 }
 
 type adminColl struct {
 	sync.RWMutex
-	eles map[string]admin // key: group name, NOTE: donot modify directly
+	eles map[string]Admin // key: group name, NOTE: donot modify directly
 }
 
-func (ac *adminColl) putIfAbsent(group string, c admin) (prev admin, suc bool) {
+func (ac *adminColl) putIfAbsent(group string, c Admin) (prev Admin, suc bool) {
 	ac.Lock()
 	prev, exist := ac.eles[group]
 	if !exist {

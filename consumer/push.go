@@ -316,8 +316,8 @@ func (pc *PushConsumer) searchOffset(mq *message.Queue) (int64, error) {
 		return 0, err
 	}
 
-	return pc.rpc.SearchOffsetByTimestamp(
-		addr, broker, mq.Topic, mq.QueueID, pc.LastestConsumeTimestamp, time.Second*3,
+	return pc.client.SearchOffsetByTimestamp(
+		addr, mq.Topic, mq.QueueID, pc.LastestConsumeTimestamp, time.Second*3,
 	)
 }
 

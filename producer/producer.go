@@ -55,7 +55,6 @@ type Producer struct {
 	Config
 	rocketmq.Server
 	topicPublishInfos topicPublishInfoTable
-	client            client.MQClient
 	mqclient          mqClient
 	mqFaultStrategy   *MQFaultStrategy
 
@@ -97,18 +96,18 @@ func (p *Producer) start() (err error) {
 			PollNameServerInterval:  p.PollNameServerInterval,
 			NameServerAddrs:         p.NameServerAddrs,
 		}, p.ClientID, p.Logger)
-	p.mqclient, p.client = client, client
+	p.mqclient = client
 	if err != nil {
 		return
 	}
 
-	err = p.client.RegisterProducer(p)
+	err = p.mqclient.RegisterProducer(p)
 	if err != nil {
 		p.Logger.Errorf("register producer error:%s", err.Error())
 		return
 	}
 
-	err = p.client.Start()
+	err = p.mqclient.Start()
 	p.mqFaultStrategy = NewMQFaultStrategy(true)
 	return
 }
@@ -116,8 +115,8 @@ func (p *Producer) start() (err error) {
 // Shutdown shutdown the producer
 func (p *Producer) shutdown() {
 	p.Logger.Info("shutdown producer:" + p.GroupName)
-	p.client.UnregisterProducer(p.GroupName)
-	p.client.Shutdown()
+	p.mqclient.UnregisterProducer(p.GroupName)
+	p.mqclient.Shutdown()
 	p.Logger.Infof("shutdown producer:%s END", p.GroupName)
 }
 
@@ -255,7 +254,7 @@ func (p *Producer) getRouters(topic string) (*topicPublishInfo, error) {
 	}
 
 	if !pi.hasQueue() {
-		err := p.client.UpdateTopicRouterInfoFromNamesrv(topic)
+		err := p.mqclient.UpdateTopicRouterInfoFromNamesrv(topic)
 		if err != nil {
 			p.Logger.Errorf("update topic router from namesrv error:%s", err)
 			return nil, err

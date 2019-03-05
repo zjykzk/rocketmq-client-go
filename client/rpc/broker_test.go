@@ -14,8 +14,8 @@ func TestBroker(t *testing.T) {
 }
 
 func testCreateTopic(t *testing.T) {
-	rpc := NewRPC(remote.NewClient(remote.ClientConfig{}, nil, &log.MockLogger{}))
-	err := rpc.CreateOrUpdateTopic("localhost:10909", &CreateOrUpdateTopicHeader{
+	client := remote.NewClient(remote.ClientConfig{}, nil, &log.MockLogger{})
+	err := CreateOrUpdateTopic(client, "localhost:10909", &CreateOrUpdateTopicHeader{
 		Topic:           "test_create_topic",
 		DefaultTopic:    "default_topic",
 		ReadQueueNums:   4,
@@ -29,7 +29,7 @@ func testCreateTopic(t *testing.T) {
 }
 
 func testDeleteTopic(t *testing.T) {
-	rpc := NewRPC(remote.NewClient(remote.ClientConfig{}, nil, &log.MockLogger{}))
-	err := rpc.DeleteTopicInBroker("localhost:10909", "test_create_topic", time.Millisecond*100)
+	client := remote.NewClient(remote.ClientConfig{}, nil, &log.MockLogger{})
+	err := DeleteTopicInBroker(client, "localhost:10909", "test_create_topic", time.Millisecond*100)
 	t.Log(err)
 }

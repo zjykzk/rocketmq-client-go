@@ -85,7 +85,7 @@ func (mc *mockConsumer) RunningInfo() RunningInfo {
 func TestConsumer(t *testing.T) {
 	group := "g1"
 	mc := &mockConsumer{group: group}
-	cc := consumerColl{eles: make(map[string]consumer)}
+	cc := consumerColl{eles: make(map[string]Consumer)}
 	prev, suc := cc.putIfAbsent(group, mc)
 	assert.Nil(t, prev)
 	assert.True(t, suc)
@@ -114,7 +114,7 @@ func (a *mockAdmin) Group() string {
 func TestAdmin(t *testing.T) {
 	group := "g1"
 	ma := &mockAdmin{group: group}
-	ac := adminColl{eles: make(map[string]admin)}
+	ac := adminColl{eles: make(map[string]Admin)}
 	prev, suc := ac.putIfAbsent(group, ma)
 	assert.Nil(t, prev)
 	assert.True(t, suc)

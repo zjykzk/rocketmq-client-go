@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/zjykzk/rocketmq-client-go"
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/remote"
-	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -22,9 +22,9 @@ type MQClient interface {
 
 	RegisterProducer(p Producer) error
 	UnregisterProducer(group string)
-	RegisterConsumer(co consumer) error
+	RegisterConsumer(co Consumer) error
 	UnregisterConsumer(group string)
-	RegisterAdmin(a admin) error
+	RegisterAdmin(a Admin) error
 	UnregisterAdmin(group string)
 	UpdateTopicRouterInfoFromNamesrv(topic string) error
 
@@ -93,9 +93,9 @@ func newMQClient(config *Config, clientID string, logger log.Logger) *MqClient {
 	c := &MqClient{
 		clientID:       clientID,
 		exitChan:       make(chan struct{}),
-		consumers:      consumerColl{eles: make(map[string]consumer)},
+		consumers:      consumerColl{eles: make(map[string]Consumer)},
 		producers:      producerColl{eles: make(map[string]Producer)},
-		admins:         adminColl{eles: make(map[string]admin)},
+		admins:         adminColl{eles: make(map[string]Admin)},
 		brokerAddrs:    brokerAddrTable{table: make(map[string]map[int32]string)},
 		brokerVersions: brokerVersionTable{table: make(map[string]map[string]int32)},
 		routersOfTopic: route.NewTopicRouterTable(),
@@ -138,7 +138,7 @@ func NewMQClient(config *Config, clientID string, logger log.Logger) (*MqClient,
 }
 
 // RegisterConsumer registers consumer
-func (c *MqClient) RegisterConsumer(co consumer) error {
+func (c *MqClient) RegisterConsumer(co Consumer) error {
 	group := co.Group()
 	if group == "" || co == nil {
 		return errors.New("bad consumer params")
@@ -195,7 +195,7 @@ func (c *MqClient) unregisterClient(producerGroup, consumerGroup string) {
 }
 
 // RegisterAdmin registers admin
-func (c *MqClient) RegisterAdmin(a admin) error {
+func (c *MqClient) RegisterAdmin(a Admin) error {
 	group := a.Group()
 	if group == "" || a == nil {
 		return errors.New("bad admin params")

@@ -8,10 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote"
-	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 )
 
 func TestPullConsumer(t *testing.T) {
@@ -19,7 +18,6 @@ func TestPullConsumer(t *testing.T) {
 	namesrvAddrs := []string{"10.200.20.54:9988", "10.200.20.25:9988"}
 	c := NewPullConsumer("test-senddlt", namesrvAddrs, logger)
 	c.Start()
-	c.rpc = &mockConsumerRPC{}
 	c.client = &mockMQClient{}
 
 	defer c.Shutdown()
@@ -37,6 +35,18 @@ type mockMQClient struct {
 	*client.EmptyMQClient
 	brokderAddr            string
 	updateTopicRouterCount int
+
+	sendBackAddr string
+	pullCount    int
+
+	maxOffset    int64
+	maxOffsetErr *rpc.Error
+
+	searchOffsetByTimestampRet int64
+	searchOffsetByTimestampErr *rpc.Error
+
+	getConsumerIDsErr error
+	clientIDs         []string
 }
 
 func (c *mockMQClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
@@ -61,24 +71,10 @@ func (c *mockMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
 	return nil
 }
 
-type mockConsumerRPC struct {
-	sendBackAddr string
-	pullCount    int
-
-	maxOffset    int64
-	maxOffsetErr *remote.RPCError
-
-	searchOffsetByTimestampRet int64
-	searchOffsetByTimestampErr *remote.RPCError
-
-	getConsumerIDsErr error
-	clientIDs         []string
+func (c *mockMQClient) GetConsumerIDs(addr, group string, to time.Duration) ([]string, error) {
+	return c.clientIDs, c.getConsumerIDsErr
 }
-
-func (r *mockConsumerRPC) GetConsumerIDs(addr, group string, to time.Duration) ([]string, error) {
-	return r.clientIDs, r.getConsumerIDsErr
-}
-func (r *mockConsumerRPC) PullMessageSync(
+func (c *mockMQClient) PullMessageSync(
 	addr string, header *rpc.PullHeader, to time.Duration,
 ) (*rpc.PullResponse, error) {
 	pr := &rpc.PullResponse{
@@ -95,7 +91,7 @@ func (r *mockConsumerRPC) PullMessageSync(
 		},
 		SuggestBrokerID: 123,
 	}
-	switch r.pullCount++; r.pullCount {
+	switch c.pullCount++; c.pullCount {
 	case 1:
 		return nil, errors.New("mock pull error")
 	case 2:
@@ -109,40 +105,40 @@ func (r *mockConsumerRPC) PullMessageSync(
 	}
 	return pr, nil
 }
-func (r *mockConsumerRPC) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) error {
-	r.sendBackAddr = addr
+func (c *mockMQClient) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) error {
+	c.sendBackAddr = addr
 	return nil
 }
 
-func (r *mockConsumerRPC) UpdateConsumerOffset(
+func (c *mockMQClient) UpdateConsumerOffset(
 	addr, topic, group string, queueID int, offset int64, to time.Duration,
 ) error {
 	return nil
 }
 
-func (r *mockConsumerRPC) UpdateConsumerOffsetOneway(
+func (c *mockMQClient) UpdateConsumerOffsetOneway(
 	addr, topic, group string, queueID int, offset int64,
 ) error {
 	return nil
 }
 
-func (r *mockConsumerRPC) QueryConsumerOffset(
+func (c *mockMQClient) QueryConsumerOffset(
 	addr, topic, group string, queueID int, to time.Duration,
 ) (
-	int64, *remote.RPCError,
+	int64, *rpc.Error,
 ) {
 	return 0, nil
 }
 
-func (r *mockConsumerRPC) MaxOffset(addr, topic string, queueID uint8, to time.Duration) (
-	int64, *remote.RPCError,
+func (c *mockMQClient) MaxOffset(addr, topic string, queueID uint8, to time.Duration) (
+	int64, *rpc.Error,
 ) {
-	return r.maxOffset, r.maxOffsetErr
+	return c.maxOffset, c.maxOffsetErr
 }
-func (r *mockConsumerRPC) SearchOffsetByTimestamp(addr, broker, topic string, queueID uint8, timestamp time.Time, to time.Duration) (
-	int64, *remote.RPCError,
+func (c *mockMQClient) SearchOffsetByTimestamp(addr, topic string, queueID uint8, timestamp time.Time, to time.Duration) (
+	int64, *rpc.Error,
 ) {
-	return r.searchOffsetByTimestampRet, r.searchOffsetByTimestampErr
+	return c.searchOffsetByTimestampRet, c.searchOffsetByTimestampErr
 }
 
 func testSendback(c *PullConsumer, t *testing.T) {

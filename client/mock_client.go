@@ -9,9 +9,9 @@ func (c *EmptyMQClient) Shutdown()    {}
 
 func (c *EmptyMQClient) RegisterProducer(p Producer) error                   { return nil }
 func (c *EmptyMQClient) UnregisterProducer(group string)                     {}
-func (c *EmptyMQClient) RegisterConsumer(co consumer) error                  { return nil }
+func (c *EmptyMQClient) RegisterConsumer(co Consumer) error                  { return nil }
 func (c *EmptyMQClient) UnregisterConsumer(group string)                     {}
-func (c *EmptyMQClient) RegisterAdmin(a admin) error                         { return nil }
+func (c *EmptyMQClient) RegisterAdmin(a Admin) error                         { return nil }
 func (c *EmptyMQClient) UnregisterAdmin(group string)                        {}
 func (c *EmptyMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error { return nil }
 

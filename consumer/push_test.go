@@ -9,9 +9,9 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -77,7 +77,7 @@ func TestUpdateProcessTable(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	mockOffseter, mockConsumerService := &mockOffseter{}, &mockConsumerService{}
 	pc.offseter, pc.consumerService = mockOffseter, mockConsumerService
-	pc.rpc = &mockConsumerRPC{}
+	pc.client = &mockMQClient{}
 
 	mmp := &mockMessagePuller{}
 	pc.pullService, _ = newPullService(pullServiceConfig{
@@ -191,7 +191,7 @@ func TestReblance(t *testing.T) {
 
 	clientID := "a"
 	pc.ClientID = clientID
-	pc.rpc = &mockConsumerRPC{clientIDs: []string{clientID}}
+	pc.client = &mockMQClient{clientIDs: []string{clientID}}
 
 	// no queue
 	pc.reblance("TestReblance")
@@ -209,8 +209,8 @@ func TestReblance(t *testing.T) {
 func TestComputeFromLastOffset(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockRPC, mockMQClient := &mockOffseter{}, &mockConsumerRPC{}, &mockMQClient{}
-	pc.offseter, pc.rpc, pc.client = mockOffseter, mockRPC, mockMQClient
+	mockOffseter, mockMQClient := &mockOffseter{}, &mockMQClient{}
+	pc.offseter, pc.client = mockOffseter, mockMQClient
 
 	pc.FromWhere = consumeFromLastOffset
 	mockMQClient.brokderAddr = "mock"
@@ -224,7 +224,7 @@ func TestComputeFromLastOffset(t *testing.T) {
 
 	// from remote
 	mockOffseter.readOffsetErr = errOffsetNotExist
-	mockRPC.maxOffset = 22
+	mockMQClient.maxOffset = 22
 	offset, err = pc.computeWhereToPull(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(22), offset)
@@ -243,10 +243,10 @@ func TestComputeFromLastOffset(t *testing.T) {
 
 	// bad maxoffset offset
 	q.Topic = ""
-	mockRPC.maxOffsetErr = &remote.RPCError{}
+	mockMQClient.maxOffsetErr = &rpc.Error{}
 	_, err = pc.computeWhereToPull(q)
-	assert.Equal(t, mockRPC.maxOffsetErr, err)
-	mockRPC.maxOffsetErr = nil
+	assert.Equal(t, mockMQClient.maxOffsetErr, err)
+	mockMQClient.maxOffsetErr = nil
 
 	// retry topic
 	q.Topic = rocketmq.RetryGroupTopicPrefix + "t"
@@ -258,8 +258,8 @@ func TestComputeFromLastOffset(t *testing.T) {
 func TestComputeFromFirstOffset(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockRPC, mockMQClient := &mockOffseter{}, &mockConsumerRPC{}, &mockMQClient{}
-	pc.offseter, pc.rpc, pc.client = mockOffseter, mockRPC, mockMQClient
+	mockOffseter, mockMQClient := &mockOffseter{}, &mockMQClient{}
+	pc.offseter, pc.client = mockOffseter, mockMQClient
 
 	pc.FromWhere = consumeFromFirstOffset
 	mockMQClient.brokderAddr = "mock"
@@ -286,8 +286,8 @@ func TestComputeFromFirstOffset(t *testing.T) {
 func TestComputeFromTimestamp(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockRPC, mockMQClient := &mockOffseter{}, &mockConsumerRPC{}, &mockMQClient{}
-	pc.offseter, pc.rpc, pc.client = mockOffseter, mockRPC, mockMQClient
+	mockOffseter, mockMQClient := &mockOffseter{}, &mockMQClient{}
+	pc.offseter, pc.client = mockOffseter, mockMQClient
 
 	pc.FromWhere = consumeFromTimestamp
 	mockMQClient.brokderAddr = "mock"
@@ -306,7 +306,7 @@ func TestComputeFromTimestamp(t *testing.T) {
 	mockOffseter.readOffsetErr = nil
 
 	// not exist and retry topic
-	mockRPC.maxOffset = 100
+	mockMQClient.maxOffset = 100
 	q.Topic = rocketmq.RetryGroupTopicPrefix
 	mockOffseter.readOffsetErr = errOffsetNotExist
 	offset, err = pc.computeFromTimestamp(q)
@@ -315,14 +315,14 @@ func TestComputeFromTimestamp(t *testing.T) {
 
 	// not exist, search remote suc
 	q.Topic = ""
-	mockRPC.searchOffsetByTimestampRet = 200
+	mockMQClient.searchOffsetByTimestampRet = 200
 	offset, err = pc.computeFromTimestamp(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(200), offset)
 
 	// not exist search failed
-	mockRPC.searchOffsetByTimestampErr = &remote.RPCError{}
+	mockMQClient.searchOffsetByTimestampErr = &rpc.Error{}
 	offset, err = pc.computeFromTimestamp(q)
-	assert.Equal(t, mockRPC.searchOffsetByTimestampErr, err)
-	mockRPC.searchOffsetByTimestampErr = nil
+	assert.Equal(t, mockMQClient.searchOffsetByTimestampErr, err)
+	mockMQClient.searchOffsetByTimestampErr = nil
 }

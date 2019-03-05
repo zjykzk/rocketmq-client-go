@@ -11,9 +11,9 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote/rpc"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -75,7 +75,6 @@ type consumer struct {
 	assigner        queueAssigner
 	offseter        offseter
 	startTime       time.Time
-	rpc             rpcI
 
 	runnerInfo func() client.RunningInfo
 
@@ -84,7 +83,7 @@ type consumer struct {
 	sync.WaitGroup
 	exitChan chan struct{}
 
-	client client.MQClient
+	client mqClient
 
 	Logger log.Logger
 }
@@ -136,7 +135,6 @@ func (c *consumer) start() (err error) {
 		return
 	}
 
-	c.rpc = rpc.NewRPC(c.client.RemotingClient())
 	c.startTime = time.Now()
 	c.exitChan = make(chan struct{})
 	c.schedule(time.Second, c.ReblanceInterval, c.ReblanceQueue)
@@ -312,7 +310,7 @@ func (c *consumer) QueryConsumerOffset(q *message.Queue) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("cannot find broker address:%s %s, error:%s", q.BrokerName, q.Topic, err)
 	}
-	offset, rpcErr := c.rpc.QueryConsumerOffset(addr, q.Topic, c.Group(), int(q.QueueID), time.Second*5)
+	offset, rpcErr := c.client.QueryConsumerOffset(addr, q.Topic, c.Group(), int(q.QueueID), time.Second*5)
 	if rpcErr == nil {
 		return offset, nil
 	}
@@ -329,7 +327,7 @@ func (c *consumer) QueryMaxOffset(q *message.Queue) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("cannot find broker address:%s %s, error:%s", q.BrokerName, q.Topic, err)
 	}
-	offset, rpcErr := c.rpc.MaxOffset(addr, q.Topic, q.QueueID, time.Second*5)
+	offset, rpcErr := c.client.MaxOffset(addr, q.Topic, q.QueueID, time.Second*5)
 	if rpcErr == nil {
 		return offset, nil
 	}
@@ -344,9 +342,9 @@ func (c *consumer) UpdateOffset(q *message.Queue, offset int64, oneway bool) err
 		return nil
 	}
 	if oneway {
-		return c.rpc.UpdateConsumerOffsetOneway(addr, q.Topic, c.Group(), int(q.QueueID), offset)
+		return c.client.UpdateConsumerOffsetOneway(addr, q.Topic, c.Group(), int(q.QueueID), offset)
 	}
-	return c.rpc.UpdateConsumerOffset(addr, q.Topic, c.Group(), int(q.QueueID), offset, time.Second*5)
+	return c.client.UpdateConsumerOffset(addr, q.Topic, c.Group(), int(q.QueueID), offset, time.Second*5)
 }
 
 func (c *consumer) PersistOffset() {
@@ -398,7 +396,7 @@ func (c *consumer) getConsumerIDs(topic, group string) []string {
 		return nil
 	}
 
-	clientIDs, err := c.rpc.GetConsumerIDs(addr, group, time.Second*3)
+	clientIDs, err := c.client.GetConsumerIDs(addr, group, time.Second*3)
 	if err != nil {
 		c.Logger.Errorf("get client ids error:%s, group %s, broker %s", err, group, addr)
 		return nil

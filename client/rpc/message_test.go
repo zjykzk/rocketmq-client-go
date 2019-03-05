@@ -88,3 +88,32 @@ func TestSendHeader(t *testing.T) {
 		"maxReconsumeTimes":     "0",
 	}, h.ToMap())
 }
+
+func TestPullHeader(t *testing.T) {
+	h := &PullHeader{
+		ConsumerGroup:        "cg",
+		Topic:                "TestPullHeader",
+		QueueOffset:          7,
+		MaxCount:             100,
+		SysFlag:              77,
+		CommitOffset:         17,
+		SuspendTimeoutMillis: 27,
+		Subscription:         "subscription TestPullHeader",
+		SubVersion:           777,
+		ExpressionType:       "expre",
+		QueueID:              37,
+	}
+	assert.Equal(t, map[string]string{
+		"consumerGroup":        "cg",
+		"topic":                "TestPullHeader",
+		"queueId":              "37",
+		"queueOffset":          "7",
+		"maxMsgNums":           "100",
+		"sysFlag":              "77",
+		"commitOffset":         "17",
+		"suspendTimeoutMillis": "27",
+		"subscription":         "subscription TestPullHeader",
+		"subVersion":           "777",
+		"expressionType":       "expre",
+	}, h.ToMap())
+}
