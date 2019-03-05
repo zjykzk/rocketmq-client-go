@@ -48,12 +48,13 @@ func TestAdmin(t *testing.T) {
 }
 
 type mockMQClient struct {
-	*client.EmptyMQClient
-
 	mockBrokerAddrs       map[string]string
 	createTopicErrorCount int
 }
 
+func (c *mockMQClient) AdminCount() int                    { return 0 }
+func (c *mockMQClient) RegisterAdmin(a client.Admin) error { return nil }
+func (c *mockMQClient) UnregisterAdmin(group string)       {}
 func (c *mockMQClient) FindBrokerAddr(broker string, hintID int32, lock bool) (
 	*client.FindBrokerResult, error,
 ) {
@@ -65,6 +66,8 @@ func (c *mockMQClient) FindBrokerAddr(broker string, hintID int32, lock bool) (
 	return &client.FindBrokerResult{Addr: addr}, nil
 }
 
+func (c *mockMQClient) Start() error { return nil }
+func (c *mockMQClient) Shutdown()    {}
 func (c *mockMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
 	c.mockBrokerAddrs[broker] = "mock address"
 	return nil

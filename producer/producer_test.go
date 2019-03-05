@@ -12,7 +12,6 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -79,25 +78,7 @@ func TestSendHeader(t *testing.T) {
 	assert.Equal(t, "", m.Properties[message.PropertyMaxReconsumeTimes])
 }
 
-type mockRemoteClient struct {
-	*remote.MockClient
-
-	requestSyncErr error
-	command        remote.Command
-}
-
-func (m *mockRemoteClient) RequestSync(
-	addr string, cmd *remote.Command, timeout time.Duration,
-) (
-	*remote.Command, error,
-) {
-	return &m.command, m.requestSyncErr
-}
-
 type mockMQClient struct {
-	*client.EmptyMQClient
-	mqClient mockRemoteClient
-
 	brokerAddr       map[string]string
 	p                *Producer
 	updateTopicCount int
@@ -105,8 +86,6 @@ type mockMQClient struct {
 	updateTopicRouterInfoFromNamesrvErr error
 	topicRouter                         *route.TopicRouter
 }
-
-func (c *mockMQClient) RemotingClient() remote.Client { return &c.mqClient }
 
 func (c *mockMQClient) GetMasterBrokerAddr(broker string) string {
 	return c.brokerAddr[broker]

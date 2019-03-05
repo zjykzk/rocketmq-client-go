@@ -32,7 +32,6 @@ func TestPullConsumer(t *testing.T) {
 }
 
 type mockMQClient struct {
-	*client.EmptyMQClient
 	brokderAddr            string
 	updateTopicRouterCount int
 
@@ -49,6 +48,11 @@ type mockMQClient struct {
 	clientIDs         []string
 }
 
+func (c *mockMQClient) Start() error                              { return nil }
+func (c *mockMQClient) Shutdown()                                 {}
+func (c *mockMQClient) RegisterConsumer(co client.Consumer) error { return nil }
+func (c *mockMQClient) UnregisterConsumer(group string)           {}
+func (c *mockMQClient) SendHeartbeat()                            {}
 func (c *mockMQClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
 	*client.FindBrokerResult, error,
 ) {

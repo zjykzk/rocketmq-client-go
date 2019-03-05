@@ -15,31 +15,6 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
-// MQClient exchange the message with server
-type MQClient interface {
-	Start() error
-	Shutdown()
-
-	RegisterProducer(p Producer) error
-	UnregisterProducer(group string)
-	RegisterConsumer(co Consumer) error
-	UnregisterConsumer(group string)
-	RegisterAdmin(a Admin) error
-	UnregisterAdmin(group string)
-	UpdateTopicRouterInfoFromNamesrv(topic string) error
-
-	AdminCount() int
-	ConsumerCount() int
-	ProducerCount() int
-
-	GetMasterBrokerAddr(brokerName string) string
-	GetMasterBrokerAddrs() []string
-	FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (*FindBrokerResult, error)
-	FindAnyBrokerAddr(brokerName string) (*FindBrokerResult, error)
-	RemotingClient() remote.Client
-	SendHeartbeat()
-}
-
 type MqClient struct {
 	Config
 	sync.RWMutex
