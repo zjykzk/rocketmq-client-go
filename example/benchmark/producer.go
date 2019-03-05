@@ -220,8 +220,13 @@ func (bp *bproducer) run(args []string) {
 	exitChan := make(chan struct{})
 	wg := sync.WaitGroup{}
 
+	logFile, err := os.Create("benchmark_producer.log")
+	if err != nil {
+		fmt.Printf("open log file error:%s\n", err)
+		return
+	}
 	p := producer.NewProducer(
-		bp.groupID, strings.Split(bp.nameSrv, ","), log.Std,
+		bp.groupID, strings.Split(bp.nameSrv, ","), log.New(logFile, "", log.Ldefault),
 	)
 
 	err = p.Start()

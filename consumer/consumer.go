@@ -100,9 +100,7 @@ func (c *consumer) start() (err error) {
 		return
 	}
 
-	if c.MessageModel == Clustering && c.InstanceName == defaultInstanceName {
-		c.InstanceName = strconv.Itoa(os.Getpid())
-	}
+	c.updateInstanceName()
 
 	c.subscribeQueues = client.NewQueueTable()
 	c.subscribeData = client.NewDataTable()
@@ -141,9 +139,20 @@ func (c *consumer) start() (err error) {
 
 	c.startTime = time.Now()
 	c.exitChan = make(chan struct{})
+
+	c.scheduleTasks()
+	return
+}
+
+func (c *consumer) updateInstanceName() {
+	if c.MessageModel == Clustering && c.InstanceName == defaultInstanceName {
+		c.InstanceName = strconv.Itoa(os.Getpid())
+	}
+}
+
+func (c *consumer) scheduleTasks() {
 	c.schedule(time.Second, c.ReblanceInterval, c.ReblanceQueue)
 	c.schedule(time.Second, c.PersistConsumerOffsetInterval, c.PersistOffset)
-	return
 }
 
 // Shutdown the works of consumer
