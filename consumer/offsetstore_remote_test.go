@@ -38,7 +38,7 @@ func TestRemoteStore(t *testing.T) {
 	assert.NotNil(t, err)
 	rs, err = newRemoteStore(remoteStoreConfig{
 		offsetOper: mockRemoteOper,
-		logger:     log.MockLogger{},
+		logger:     log.Std,
 	})
 	assert.Nil(t, err)
 

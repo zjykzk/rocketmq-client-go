@@ -25,7 +25,7 @@ func TestMQClient(t *testing.T) {
 	_, err = NewMQClient(&Config{}, "clientid", nil)
 	assert.NotNil(t, err)
 
-	logger := &log.MockLogger{}
+	logger := log.Std
 	client, err := NewMQClient(&Config{NameServerAddrs: []string{"addr"}}, "clientid", logger)
 	if err != nil {
 		t.Fatal(err)

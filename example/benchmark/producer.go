@@ -221,7 +221,7 @@ func (bp *bproducer) run(args []string) {
 	wg := sync.WaitGroup{}
 
 	p := producer.NewProducer(
-		bp.groupID, strings.Split(bp.nameSrv, ","), &log.MockLogger{},
+		bp.groupID, strings.Split(bp.nameSrv, ","), log.Std,
 	)
 
 	err = p.Start()

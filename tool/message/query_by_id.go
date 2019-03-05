@@ -40,7 +40,7 @@ func (q *queryByID) Run(args []string) {
 		return
 	}
 
-	logger := &log.MockLogger{}
+	logger := log.Std
 	a := admin.NewAdmin([]string{"X"}, logger)
 	a.Start()
 

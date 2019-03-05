@@ -64,7 +64,7 @@ func (s *sendMsg) Run(args []string) {
 		return
 	}
 
-	logger := &log.MockLogger{}
+	logger := log.Std
 	p := producer.NewProducer("test-group", strings.Split(s.namesrvAddrs, ","), logger)
 	p.Start()
 

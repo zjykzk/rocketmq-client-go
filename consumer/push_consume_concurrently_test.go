@@ -78,7 +78,7 @@ func newTestConcurrentlyService(t *testing.T) *consumeConcurrentlyService {
 			group:           "test concurrent consume service",
 			messageSendBack: &mockSendback{},
 			offseter:        &mockOffseter{},
-			logger:          &log.MockLogger{},
+			logger:          log.Std,
 		},
 		consumer:             &mockConcurrentlyConsumer{},
 		consumeTimeout:       time.Second * 20,
@@ -101,7 +101,7 @@ func TestNewConcurrentlyService(t *testing.T) {
 		consumeServiceConfig: consumeServiceConfig{
 			group:           "test consume service",
 			messageSendBack: &mockSendback{},
-			logger:          &log.MockLogger{},
+			logger:          log.Std,
 		},
 	})
 	assert.NotNil(t, err)
@@ -111,7 +111,7 @@ func TestNewConcurrentlyService(t *testing.T) {
 		consumeServiceConfig: consumeServiceConfig{
 			group:           "test consume service",
 			messageSendBack: &mockSendback{},
-			logger:          &log.MockLogger{},
+			logger:          log.Std,
 		},
 		consumer: consumer,
 	})

@@ -14,7 +14,7 @@ func newTestConsumeService(t *testing.T) *consumeService {
 	cs, err := newConsumeService(consumeServiceConfig{
 		group:           "test consume service",
 		messageSendBack: &mockSendback{},
-		logger:          &log.MockLogger{},
+		logger:          log.Std,
 		offseter:        &mockOffseter{},
 	})
 	if err != nil {
@@ -28,17 +28,17 @@ func TestNewService(t *testing.T) {
 	_, err := newConsumeService(consumeServiceConfig{group: "g"})
 	assert.NotNil(t, err)
 
-	_, err = newConsumeService(consumeServiceConfig{group: "g", logger: &log.MockLogger{}})
+	_, err = newConsumeService(consumeServiceConfig{group: "g", logger: log.Std})
 	assert.NotNil(t, err)
 
 	_, err = newConsumeService(consumeServiceConfig{
-		group: "g", logger: &log.MockLogger{}, messageSendBack: &mockSendback{},
+		group: "g", logger: log.Std, messageSendBack: &mockSendback{},
 	})
 	assert.NotNil(t, err)
 
 	_, err = newConsumeService(consumeServiceConfig{
 		group:           "g",
-		logger:          &log.MockLogger{},
+		logger:          log.Std,
 		messageSendBack: &mockSendback{},
 		offseter:        &mockOffseter{},
 	})

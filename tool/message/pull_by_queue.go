@@ -64,7 +64,7 @@ func (p *pullByQueue) Run(args []string) {
 		return
 	}
 
-	logger := &log.MockLogger{}
+	logger := log.Std
 	c := consumer.NewPullConsumer("test-group", strings.Split(p.namesrvAddrs, ","), logger)
 	c.Start()
 

@@ -22,7 +22,7 @@ func (f *fakeRemoteClient) RequestSync(string, *remote.Command, time.Duration) (
 }
 
 func fakeClient() *MqClient {
-	c := newMQClient(&Config{}, "", &log.MockLogger{})
+	c := newMQClient(&Config{}, "", log.Std)
 	c.Client = &fakeRemoteClient{}
 	return c
 }

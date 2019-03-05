@@ -14,7 +14,7 @@ import (
 )
 
 func TestPullConsumer(t *testing.T) {
-	logger := &log.MockLogger{}
+	logger := log.Std
 	namesrvAddrs := []string{"10.200.20.54:9988", "10.200.20.25:9988"}
 	c := NewPullConsumer("test-senddlt", namesrvAddrs, logger)
 	c.Start()

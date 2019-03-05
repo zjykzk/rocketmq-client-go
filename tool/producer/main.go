@@ -44,7 +44,7 @@ func main() {
 	}
 
 	fmt.Printf("namesrv:%s, topic:%s, send count:%d\n", namesrvAddrs, topic, sendCount)
-	p := producer.NewProducer("test-group", strings.Split(namesrvAddrs, ","), &log.MockLogger{})
+	p := producer.NewProducer("test-group", strings.Split(namesrvAddrs, ","), log.Std)
 	err := p.Start()
 	if err != nil {
 		fmt.Printf("start error:%v", err)

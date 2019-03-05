@@ -48,7 +48,7 @@ func (c *clientIDsOfGroupFetcher) Run(args []string) {
 		return
 	}
 
-	logger := &log.MockLogger{}
+	logger := log.Std
 	a := admin.NewAdmin([]string{"ignore me"}, logger)
 	a.Start()
 

@@ -48,7 +48,7 @@ func (m *mockConsumerService) insertNewMessageQueue(mq *message.Queue) (*process
 
 func newTestConcurrentConsumer() *PushConsumer {
 	pc, err := NewConcurrentConsumer(
-		"test push consumer", []string{"dummy"}, &mockConcurrentlyConsumer{}, &log.MockLogger{},
+		"test push consumer", []string{"dummy"}, &mockConcurrentlyConsumer{}, log.Std,
 	)
 	if err != nil {
 		panic(err)
@@ -58,7 +58,7 @@ func newTestConcurrentConsumer() *PushConsumer {
 }
 
 func TestNewPushConsumer(t *testing.T) {
-	pc := newPushConsumer("group", []string{}, &log.MockLogger{})
+	pc := newPushConsumer("group", []string{}, log.Std)
 	assert.NotNil(t, pc)
 	assert.Equal(t, pc.MaxReconsumeTimes, defaultPushMaxReconsumeTimes)
 	assert.Equal(t, pc.LastestConsumeTimestamp, defaultLastestConsumeTimestamp)

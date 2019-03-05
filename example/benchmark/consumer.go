@@ -178,7 +178,7 @@ func (bc *bconsumer) run(args []string) {
 	}
 
 	c := consumer.NewPullConsumer( // FIXME
-		bc.groupID, strings.Split(bc.nameSrv, ","), &log.MockLogger{},
+		bc.groupID, strings.Split(bc.nameSrv, ","), log.Std,
 	)
 
 	err := c.Start()

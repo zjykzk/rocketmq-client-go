@@ -35,8 +35,8 @@ func main() {
 		println("bad topic:" + topic)
 		return
 	}
-	logger := &log.MockLogger{}
 
+	logger := log.Std
 	a := admin.NewAdmin(strings.Split(namesrvAddrs, ","), logger)
 	a.Start()
 	defer a.Shutdown()

@@ -21,7 +21,7 @@ func TestNewPullService(t *testing.T) {
 	assert.NotNil(t, err)
 	ps, err := newPullService(pullServiceConfig{
 		messagePuller: &mockMessagePuller{},
-		logger:        log.MockLogger{},
+		logger:        log.Std,
 	})
 	assert.Nil(t, err)
 	assert.NotNil(t, ps)
@@ -31,7 +31,7 @@ func TestNewPullService(t *testing.T) {
 func TestPullService(t *testing.T) {
 	ps, err := newPullService(pullServiceConfig{
 		messagePuller: &mockMessagePuller{},
-		logger:        log.MockLogger{},
+		logger:        log.Std,
 	})
 	if err != nil {
 		t.Fatal(err)

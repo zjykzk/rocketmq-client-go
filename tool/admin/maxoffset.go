@@ -64,7 +64,7 @@ func (mo *maxOffset) Run(args []string) {
 		return
 	}
 
-	logger := &log.MockLogger{}
+	logger := log.Std
 	a := admin.NewAdmin(strings.Split(mo.namesrvAddrs, ","), logger)
 	a.Start()
 

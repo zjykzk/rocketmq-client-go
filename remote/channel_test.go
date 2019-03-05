@@ -121,8 +121,8 @@ func TestChannel(t *testing.T) {
 			Encoder:      EncoderFunc(echoEncode),
 			PacketReader: PacketReaderFunc(echoReadPacket),
 			Decoder:      DecoderFunc(echoDecode),
-			Handler:      &fakeHandler{logger: &log.MockLogger{}},
-			logger:       &log.MockLogger{},
+			Handler:      &fakeHandler{logger: log.Std},
+			logger:       log.Std,
 		})
 
 	if err != nil {

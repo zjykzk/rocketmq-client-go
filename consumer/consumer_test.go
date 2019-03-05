@@ -56,7 +56,7 @@ func TestUpdateTopicSubscribe(t *testing.T) {
 func TestFindBrokerAddr(t *testing.T) {
 	c := &consumer{
 		topicRouters: route.NewTopicRouterTable(),
-		Logger:       &log.MockLogger{},
+		Logger:       log.Std,
 	}
 
 	topic := "test"
@@ -95,7 +95,7 @@ func TestSubscribe(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	c := &consumer{
-		Logger: &log.MockLogger{},
+		Logger: log.Std,
 		Config: defaultConfig,
 	}
 	c.StartFunc, c.ShutdownFunc = c.start, c.shutdown

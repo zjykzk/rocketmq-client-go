@@ -14,7 +14,7 @@ func TestBroker(t *testing.T) {
 }
 
 func testCreateTopic(t *testing.T) {
-	client := remote.NewClient(remote.ClientConfig{}, nil, &log.MockLogger{})
+	client := remote.NewClient(remote.ClientConfig{}, nil, log.Std)
 	err := CreateOrUpdateTopic(client, "localhost:10909", &CreateOrUpdateTopicHeader{
 		Topic:           "test_create_topic",
 		DefaultTopic:    "default_topic",
@@ -29,7 +29,7 @@ func testCreateTopic(t *testing.T) {
 }
 
 func testDeleteTopic(t *testing.T) {
-	client := remote.NewClient(remote.ClientConfig{}, nil, &log.MockLogger{})
+	client := remote.NewClient(remote.ClientConfig{}, nil, log.Std)
 	err := DeleteTopicInBroker(client, "localhost:10909", "test_create_topic", time.Millisecond*100)
 	t.Log(err)
 }

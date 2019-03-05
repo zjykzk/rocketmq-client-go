@@ -64,7 +64,7 @@ func (s *sendBatch) Run(args []string) {
 		return
 	}
 
-	logger := &log.MockLogger{}
+	logger := log.Std
 	p := producer.NewProducer(s.Name(), strings.Split(s.namesrvAddrs, ","), logger)
 	p.Start()
 

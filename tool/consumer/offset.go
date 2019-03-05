@@ -76,7 +76,7 @@ func (c *offsetUpdater) Run(args []string) {
 		fmt.Println("empty group")
 		return
 	}
-	logger := &log.MockLogger{}
+	logger := log.Std
 	consumer := consumer.NewPullConsumer(c.group, strings.Split(c.namesrvAddrs, ","), logger)
 	consumer.Start()
 
@@ -127,7 +127,7 @@ func (c *offsetQuerier) Run(args []string) {
 		return
 	}
 
-	logger := &log.MockLogger{}
+	logger := log.Std
 	consumer := consumer.NewPullConsumer(c.group, strings.Split(c.namesrvAddrs, ","), logger)
 	consumer.Start()
 

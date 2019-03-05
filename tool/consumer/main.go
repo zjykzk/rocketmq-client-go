@@ -61,7 +61,7 @@ func main() {
 		println("bad tags:" + tags)
 		return
 	}
-	logger := &log.MockLogger{}
+	logger := log.Std
 	c := consumer.NewPullConsumer("test-group", strings.Split(namesrvAddrs, ","), logger)
 
 	qc := &messageQueueChanger{
