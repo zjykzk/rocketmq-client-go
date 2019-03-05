@@ -150,13 +150,18 @@ type Addr struct {
 }
 
 func (addr *Addr) String() string {
-	if len(addr.Host) == 4 {
-		return fmt.Sprintf(
-			"%d.%d.%d.%d:%d", addr.Host[0], addr.Host[1], addr.Host[2], addr.Host[3], addr.Port,
-		)
+	buf, e := bytes.Buffer{}, len(addr.Host)-1
+	for i := 0; i < e; i++ {
+		buf.WriteString(strconv.Itoa(int(addr.Host[i])))
+		buf.WriteByte('.')
 	}
+	if e >= 0 {
+		buf.WriteString(strconv.Itoa(int(addr.Host[e])))
+	}
+	buf.WriteByte(':')
+	buf.WriteString(strconv.Itoa(int(addr.Port)))
 
-	return fmt.Sprintf("%v:%d", addr.Host, addr.Port)
+	return string(buf.Bytes())
 }
 
 // Ext the message presentation with storage information
