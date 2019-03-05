@@ -24,10 +24,6 @@
 
 每个`clientID`对一个client实例。
 
-### remoting
-
-对`mq.net`的一个封装，主要实现`mq.net`中的`Request`和`Response`接口。
-
-### mq.net
+### remote
 
 通用的rpc框架。封装编解码，超时同步、异步、单向请求。
