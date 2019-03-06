@@ -14,7 +14,7 @@ func TestPullConsumer(t *testing.T) {
 	namesrvAddrs := []string{"10.200.20.54:9988", "10.200.20.25:9988"}
 	c := NewPullConsumer("test-senddlt", namesrvAddrs, logger)
 	c.Start()
-	c.client = &mockMQClient{}
+	c.client = &fakeMQClient{}
 
 	defer c.Shutdown()
 
@@ -28,13 +28,27 @@ func TestPullConsumer(t *testing.T) {
 }
 
 func testSendback(c *PullConsumer, t *testing.T) {
+	// bad id
 	msgID := "bad message"
 	assert.NotNil(t, c.SendBack(&message.Ext{MsgID: msgID}, -1, "", ""))
 
+	// ok id
 	msgID = "0AC8145700002A9F00000000006425A2"
 	msg := &message.Ext{MsgID: msgID}
-	err := c.SendBack(msg, -1, "", "mock addr")
+	err := c.SendBack(msg, -1, "", "")
 	assert.Nil(t, err)
+
+	// bad broker
+	err = c.SendBack(msg, -1, "", "bad broker")
+	assert.NotNil(t, err)
+
+	// ok broker
+	client := c.client.(*fakeMQClient)
+	brokerAddr := client.brokderAddr
+	client.brokderAddr = "ok broker"
+	err = c.SendBack(msg, -1, "", "bad broker")
+	assert.Nil(t, err)
+	client.brokderAddr = brokerAddr
 }
 
 func testPullSync(c *PullConsumer, t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
-type mockMQClient struct {
+type fakeMQClient struct {
 	brokderAddr            string
 	updateTopicRouterCount int
 
@@ -26,12 +26,12 @@ type mockMQClient struct {
 	clientIDs         []string
 }
 
-func (c *mockMQClient) Start() error                              { return nil }
-func (c *mockMQClient) Shutdown()                                 {}
-func (c *mockMQClient) RegisterConsumer(co client.Consumer) error { return nil }
-func (c *mockMQClient) UnregisterConsumer(group string)           {}
-func (c *mockMQClient) SendHeartbeat()                            {}
-func (c *mockMQClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
+func (c *fakeMQClient) Start() error                              { return nil }
+func (c *fakeMQClient) Shutdown()                                 {}
+func (c *fakeMQClient) RegisterConsumer(co client.Consumer) error { return nil }
+func (c *fakeMQClient) UnregisterConsumer(group string)           {}
+func (c *fakeMQClient) SendHeartbeat()                            {}
+func (c *fakeMQClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
 	*client.FindBrokerResult, error,
 ) {
 	if c.brokderAddr != "" {
@@ -43,7 +43,7 @@ func (c *mockMQClient) FindBrokerAddr(brokerName string, hintBrokerID int32, loc
 	return nil, errors.New("mock find broker addr error")
 }
 
-func (c *mockMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
+func (c *fakeMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
 	switch c.updateTopicRouterCount++; c.updateTopicRouterCount {
 	case 1:
 		return errors.New("mock update topic router info")
@@ -53,10 +53,10 @@ func (c *mockMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
 	return nil
 }
 
-func (c *mockMQClient) GetConsumerIDs(addr, group string, to time.Duration) ([]string, error) {
+func (c *fakeMQClient) GetConsumerIDs(addr, group string, to time.Duration) ([]string, error) {
 	return c.clientIDs, c.getConsumerIDsErr
 }
-func (c *mockMQClient) PullMessageSync(
+func (c *fakeMQClient) PullMessageSync(
 	addr string, header *rpc.PullHeader, to time.Duration,
 ) (*rpc.PullResponse, error) {
 	pr := &rpc.PullResponse{
@@ -87,24 +87,24 @@ func (c *mockMQClient) PullMessageSync(
 	}
 	return pr, nil
 }
-func (c *mockMQClient) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) error {
+func (c *fakeMQClient) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) error {
 	c.sendBackAddr = addr
 	return nil
 }
 
-func (c *mockMQClient) UpdateConsumerOffset(
+func (c *fakeMQClient) UpdateConsumerOffset(
 	addr, topic, group string, queueID int, offset int64, to time.Duration,
 ) error {
 	return nil
 }
 
-func (c *mockMQClient) UpdateConsumerOffsetOneway(
+func (c *fakeMQClient) UpdateConsumerOffsetOneway(
 	addr, topic, group string, queueID int, offset int64,
 ) error {
 	return nil
 }
 
-func (c *mockMQClient) QueryConsumerOffset(
+func (c *fakeMQClient) QueryConsumerOffset(
 	addr, topic, group string, queueID int, to time.Duration,
 ) (
 	int64, *rpc.Error,
@@ -112,16 +112,16 @@ func (c *mockMQClient) QueryConsumerOffset(
 	return 0, nil
 }
 
-func (c *mockMQClient) MaxOffset(addr, topic string, queueID uint8, to time.Duration) (
+func (c *fakeMQClient) MaxOffset(addr, topic string, queueID uint8, to time.Duration) (
 	int64, *rpc.Error,
 ) {
 	return c.maxOffset, c.maxOffsetErr
 }
-func (c *mockMQClient) SearchOffsetByTimestamp(addr, topic string, queueID uint8, timestamp time.Time, to time.Duration) (
+func (c *fakeMQClient) SearchOffsetByTimestamp(addr, topic string, queueID uint8, timestamp time.Time, to time.Duration) (
 	int64, *rpc.Error,
 ) {
 	return c.searchOffsetByTimestampRet, c.searchOffsetByTimestampErr
 }
-func (c *mockMQClient) RegisterFilter(group string, subData *client.SubscribeData) error {
+func (c *fakeMQClient) RegisterFilter(group string, subData *client.SubscribeData) error {
 	return nil
 }

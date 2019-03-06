@@ -233,7 +233,7 @@ func (pc *PushConsumer) shutdown() {
 // SendBack sends the message to the broker, the message will be consumed again after the at
 // least time specified by the delayLevel
 func (pc *PushConsumer) SendBack(m *message.Ext, delayLevel int, broker string) error {
-	return nil //TODO
+	return pc.consumer.SendBack(m, delayLevel, pc.GroupName, broker)
 }
 
 func (pc *PushConsumer) reblance(topic string) {

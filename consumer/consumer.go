@@ -44,10 +44,11 @@ type MessageQueueChanger interface {
 // Config the configuration of consumer
 type Config struct {
 	rocketmq.Client
-	ReblanceInterval time.Duration
-	MessageModel     Model
-	Typ              Type
-	FromWhere        fromWhere
+	ReblanceInterval  time.Duration
+	MessageModel      Model
+	Typ               Type
+	FromWhere         fromWhere
+	MaxReconsumeTimes int
 }
 
 const (
@@ -62,7 +63,8 @@ var defaultConfig = Config{
 		PersistConsumerOffsetInterval: 5 * time.Second,
 		InstanceName:                  defaultInstanceName,
 	},
-	ReblanceInterval: 20 * time.Second, // 20s
+	MaxReconsumeTimes: 16,
+	ReblanceInterval:  20 * time.Second, // 20s
 }
 
 type consumer struct {
@@ -463,6 +465,44 @@ func (c *consumer) reblanceQueue(topic string) ([]*message.Queue, []*message.Que
 		return nil, nil, err
 	}
 	return queues, newQueues, nil
+}
+
+// SendBack send back message
+func (c *consumer) SendBack(m *message.Ext, delayLevel int32, group, brokerName string) error {
+	if group == "" {
+		group = c.GroupName
+	}
+
+	addr, err := c.findSendBackBrokerAddr(brokerName, m.MsgID)
+	if err != nil {
+		return err
+	}
+
+	return c.client.SendBack(addr, &rpc.SendBackHeader{
+		CommitOffset:      m.CommitLogOffset,
+		Group:             group,
+		DelayLevel:        delayLevel,
+		MessageID:         m.MsgID,
+		Topic:             m.Topic,
+		MaxReconsumeTimes: c.MaxReconsumeTimes,
+	}, time.Second*3)
+}
+
+func (c *consumer) findSendBackBrokerAddr(broker, msgIDInBroker string) (string, error) {
+	if broker != "" {
+		r, err := c.client.FindBrokerAddr(broker, rocketmq.MasterID, true)
+		if err == nil {
+			return r.Addr, nil
+		}
+		return "", err
+	}
+
+	a, _, err := message.ParseMessageID(msgIDInBroker)
+
+	if err == nil {
+		return a.String(), nil
+	}
+	return "", err
 }
 
 type offsetOperAdaptor struct {

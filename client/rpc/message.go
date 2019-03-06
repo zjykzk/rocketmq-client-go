@@ -242,7 +242,7 @@ type SendBackHeader struct {
 	MessageID         string
 	Topic             string
 	IsUnitMode        bool
-	MaxReconsumeTimes int32
+	MaxReconsumeTimes int
 }
 
 // ToMap converts send back header to map
@@ -254,7 +254,7 @@ func (h *SendBackHeader) ToMap() map[string]string {
 		"originMsgId":       h.MessageID,
 		"originTopic":       h.Topic,
 		"unitMode":          strconv.FormatBool(h.IsUnitMode),
-		"maxReconsumeTimes": strconv.FormatInt(int64(h.MaxReconsumeTimes), 10),
+		"maxReconsumeTimes": strconv.Itoa(h.MaxReconsumeTimes),
 	}
 }
 

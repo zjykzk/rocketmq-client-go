@@ -20,7 +20,6 @@ type PullConsumer struct {
 	BrokerSuspendMaxTime       time.Duration
 	ConsumerTimeoutWhenSuspend time.Duration
 	ConsumerPullTimeout        time.Duration
-	MaxReconsumeTimes          int32
 
 	registerTopics   []string
 	currentMessageQs []*message.Queue
@@ -44,7 +43,6 @@ func NewPullConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 	c.BrokerSuspendMaxTime = 20 * time.Second
 	c.ConsumerTimeoutWhenSuspend = 30 * time.Second
 	c.ConsumerPullTimeout = 10 * time.Second
-	c.MaxReconsumeTimes = 16
 	c.assigner = &Averagely{}
 	c.reblancer = c
 	c.runnerInfo = c.RunningInfo
@@ -261,41 +259,6 @@ func (c *PullConsumer) RunningInfo() client.RunningInfo {
 
 func dtoMillisa(d time.Duration) string {
 	return strconv.FormatInt(int64(d/time.Millisecond), 10)
-}
-
-// SendBack send back message
-func (c *PullConsumer) SendBack(
-	m *message.Ext, delayLevel int32, group, brokerName string,
-) error {
-	if group == "" {
-		group = c.GroupName
-	}
-
-	addr := ""
-	if brokerName != "" {
-		if r, err := c.client.FindBrokerAddr(brokerName, rocketmq.MasterID, false); err == nil {
-			if !r.IsSlave {
-				addr = r.Addr
-			}
-		}
-	}
-
-	if addr == "" {
-		if a, _, err := message.ParseMessageID(m.MsgID); err == nil {
-			addr = a.String()
-		} else {
-			return err
-		}
-	}
-
-	return c.client.SendBack(addr, &rpc.SendBackHeader{
-		CommitOffset:      m.CommitLogOffset,
-		Group:             group,
-		DelayLevel:        delayLevel,
-		MessageID:         m.MsgID,
-		Topic:             m.Topic,
-		MaxReconsumeTimes: c.MaxReconsumeTimes,
-	}, time.Second*3)
 }
 
 // Register register the message queue changed event of the topics

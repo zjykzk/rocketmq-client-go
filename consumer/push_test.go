@@ -78,7 +78,7 @@ func TestUpdateProcessTable(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	mockOffseter, mockConsumerService := &mockOffseter{}, &mockConsumerService{}
 	pc.offseter, pc.consumerService = mockOffseter, mockConsumerService
-	pc.client = &mockMQClient{}
+	pc.client = &fakeMQClient{}
 
 	mmp := &mockMessagePuller{}
 	pc.pullService, _ = newPullService(pullServiceConfig{
@@ -170,7 +170,7 @@ func TestUpdateThresholdOfQueue(t *testing.T) {
 func TestUpdateSubscribeVersion(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	pc.subscribeData = client.NewSubcribeTable()
-	pc.client = &mockMQClient{}
+	pc.client = &fakeMQClient{}
 	pc.Subscribe("TestUpdateSubscribeVersion", subAll)
 
 	t1 := time.Now().UnixNano() / int64(time.Millisecond)
@@ -184,7 +184,7 @@ func TestReblance(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	mockConsumerService := &mockConsumerService{}
 	pc.offseter = &mockOffseter{}
-	pc.client = &mockMQClient{}
+	pc.client = &fakeMQClient{}
 	pc.consumerService = mockConsumerService
 
 	pc.topicRouters = route.NewTopicRouterTable()
@@ -192,7 +192,7 @@ func TestReblance(t *testing.T) {
 
 	clientID := "a"
 	pc.ClientID = clientID
-	pc.client = &mockMQClient{clientIDs: []string{clientID}}
+	pc.client = &fakeMQClient{clientIDs: []string{clientID}}
 
 	// no queue
 	pc.reblance("TestReblance")
@@ -210,7 +210,7 @@ func TestReblance(t *testing.T) {
 func TestComputeFromLastOffset(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockMQClient := &mockOffseter{}, &mockMQClient{}
+	mockOffseter, mockMQClient := &mockOffseter{}, &fakeMQClient{}
 	pc.offseter, pc.client = mockOffseter, mockMQClient
 
 	pc.FromWhere = consumeFromLastOffset
@@ -259,7 +259,7 @@ func TestComputeFromLastOffset(t *testing.T) {
 func TestComputeFromFirstOffset(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockMQClient := &mockOffseter{}, &mockMQClient{}
+	mockOffseter, mockMQClient := &mockOffseter{}, &fakeMQClient{}
 	pc.offseter, pc.client = mockOffseter, mockMQClient
 
 	pc.FromWhere = consumeFromFirstOffset
@@ -287,7 +287,7 @@ func TestComputeFromFirstOffset(t *testing.T) {
 func TestComputeFromTimestamp(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockMQClient := &mockOffseter{}, &mockMQClient{}
+	mockOffseter, mockMQClient := &mockOffseter{}, &fakeMQClient{}
 	pc.offseter, pc.client = mockOffseter, mockMQClient
 
 	pc.FromWhere = consumeFromTimestamp

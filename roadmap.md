@@ -8,6 +8,7 @@
 - [x] add std log
 - [x] producer body size limit
 - [ ] consumer long polling
+- [ ] default producer
 - [ ] consumer stats manager
 - [ ] vip request
 - [ ] transaction
