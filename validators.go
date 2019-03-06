@@ -16,13 +16,17 @@ var (
 	errLongTopic       = errors.New("long topic")
 	errMismatchPattern = errors.New("mismatch the pattern:" + pattern)
 	errDefaultTopic    = errors.New("default topic")
+
+	errEmptyGroup = errors.New("empty group")
+	errLongGroup  = errors.New("long group")
 )
 
 // CheckTopic returns the error the topic is invalid
 // the rule of the topic is following:
 // 1. only space
 // 2. over the max length
-// 3. does match the pattern
+// 3. does not match the pattern
+// 4. default topic
 func CheckTopic(topic string) error {
 	if strings.TrimSpace(topic) == "" {
 		return errEmptyTopic
@@ -39,6 +43,28 @@ func CheckTopic(topic string) error {
 
 	if DefaultTopic == topic {
 		return errDefaultTopic
+	}
+
+	return nil
+}
+
+// CheckGroup returns the error the topic is invalid
+// the rule of the topic is following:
+// 1. only space
+// 2. over the max length
+// 3. does not match the pattern
+func CheckGroup(group string) error {
+	if strings.TrimSpace(group) == "" {
+		return errEmptyGroup
+	}
+
+	if len(group) > maxTopicLen {
+		return errLongGroup
+	}
+
+	ok, _ := regexp.MatchString(pattern, group)
+	if !ok {
+		return errMismatchPattern
 	}
 
 	return nil

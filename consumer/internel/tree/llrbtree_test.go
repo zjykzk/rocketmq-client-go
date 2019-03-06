@@ -17,6 +17,8 @@ func (m mockTree) CompareTo(m1 Key) int {
 func TestTree(t *testing.T) {
 	tree := &LLRBTree{}
 
+	defer clearGraph()
+
 	// remove unpresent key
 	tree.Remove(mockTree("1"))
 
@@ -92,6 +94,8 @@ func TestTree(t *testing.T) {
 
 func TestPutAll(t *testing.T) {
 	tree := &LLRBTree{}
+
+	defer clearGraph()
 
 	// Put & Get
 	tree.Put(mockTree("1"), 1)

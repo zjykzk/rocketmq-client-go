@@ -15,7 +15,9 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
-type MqClient struct {
+// MQClient the client commuicate with broker
+// it's shared by all consumer & producer with the same client id
+type MQClient struct {
 	Config
 	sync.RWMutex
 	nameSrvMutex sync.Mutex
@@ -44,7 +46,7 @@ var errBadNamesrvAddrs = errors.New("bad name server address")
 
 type mqClientColl struct {
 	sync.RWMutex
-	eles map[string]*MqClient
+	eles map[string]*MQClient
 }
 
 func (cc *mqClientColl) delete(clientID string) bool {
@@ -58,14 +60,14 @@ func (cc *mqClientColl) delete(clientID string) bool {
 }
 
 var mqClients = mqClientColl{
-	eles: make(map[string]*MqClient),
+	eles: make(map[string]*MQClient),
 }
 
 var errEmptyClientID = errors.New("empty client id")
 var errEmptyNameSrvAddress = errors.New("empty name server address")
 
-func newMQClient(config *Config, clientID string, logger log.Logger) *MqClient {
-	c := &MqClient{
+func newMQClient(config *Config, clientID string, logger log.Logger) *MQClient {
+	c := &MQClient{
 		clientID:       clientID,
 		exitChan:       make(chan struct{}),
 		consumers:      consumerColl{eles: make(map[string]Consumer)},
@@ -93,7 +95,7 @@ func newMQClient(config *Config, clientID string, logger log.Logger) *MqClient {
 }
 
 // NewMQClient create the client
-func NewMQClient(config *Config, clientID string, logger log.Logger) (*MqClient, error) {
+func NewMQClient(config *Config, clientID string, logger log.Logger) (*MQClient, error) {
 	if clientID == "" {
 		return nil, errEmptyClientID
 	}
@@ -113,7 +115,7 @@ func NewMQClient(config *Config, clientID string, logger log.Logger) (*MqClient,
 }
 
 // RegisterConsumer registers consumer
-func (c *MqClient) RegisterConsumer(co Consumer) error {
+func (c *MQClient) RegisterConsumer(co Consumer) error {
 	group := co.Group()
 	if group == "" || co == nil {
 		return errors.New("bad consumer params")
@@ -127,13 +129,13 @@ func (c *MqClient) RegisterConsumer(co Consumer) error {
 }
 
 // UnregisterConsumer unregister producer
-func (c *MqClient) UnregisterConsumer(group string) {
+func (c *MQClient) UnregisterConsumer(group string) {
 	c.consumers.delete(group)
 	c.unregisterClient("", group)
 }
 
 // RegisterProducer registers producer
-func (c *MqClient) RegisterProducer(p Producer) error {
+func (c *MQClient) RegisterProducer(p Producer) error {
 	group := p.Group()
 	if group == "" || p == nil {
 		return errors.New("bad producer params")
@@ -147,12 +149,12 @@ func (c *MqClient) RegisterProducer(p Producer) error {
 }
 
 // UnregisterProducer unregister producer
-func (c *MqClient) UnregisterProducer(group string) {
+func (c *MQClient) UnregisterProducer(group string) {
 	c.producers.delete(group)
 	c.unregisterClient(group, "")
 }
 
-func (c *MqClient) unregisterClient(producerGroup, consumerGroup string) {
+func (c *MQClient) unregisterClient(producerGroup, consumerGroup string) {
 	clientID, timeout := c.clientID, 3*time.Second
 	c.Lock()
 	for _, name := range c.brokerAddrs.brokerNames() {
@@ -170,7 +172,7 @@ func (c *MqClient) unregisterClient(producerGroup, consumerGroup string) {
 }
 
 // RegisterAdmin registers admin
-func (c *MqClient) RegisterAdmin(a Admin) error {
+func (c *MQClient) RegisterAdmin(a Admin) error {
 	group := a.Group()
 	if group == "" || a == nil {
 		return errors.New("bad admin params")
@@ -184,12 +186,12 @@ func (c *MqClient) RegisterAdmin(a Admin) error {
 }
 
 // UnregisterAdmin unregister producer
-func (c *MqClient) UnregisterAdmin(group string) {
+func (c *MQClient) UnregisterAdmin(group string) {
 	c.admins.delete(group)
 }
 
 // Start client tasks
-func (c *MqClient) Start() error {
+func (c *MQClient) Start() error {
 	c.Lock()
 	defer c.Unlock()
 	switch c.state {
@@ -208,7 +210,7 @@ func (c *MqClient) Start() error {
 }
 
 // Shutdown client
-func (c *MqClient) Shutdown() {
+func (c *MQClient) Shutdown() {
 	c.logger.Infof("shutdown mqclient, state %s", c.state.String())
 	if c.producers.size() > 0 { // NOTE here is different from ROCKETMQ JAVA SDK, since the DefaultMQProducer is not stored here
 		c.logger.Info("producer not empty ignore")
@@ -239,7 +241,7 @@ func (c *MqClient) Shutdown() {
 	c.logger.Info("shutdown mqclient END")
 }
 
-func (c *MqClient) updateTopicRoute() {
+func (c *MQClient) updateTopicRoute() {
 	topics := make([]string, 0, 256)
 
 	for _, c := range c.consumers.coll() {
@@ -256,18 +258,18 @@ func (c *MqClient) updateTopicRoute() {
 }
 
 // UpdateTopicRouterInfoFromNamesrv udpate the topic for the producer/consumer from the namesrv
-func (c *MqClient) UpdateTopicRouterInfoFromNamesrv(topic string) (err error) {
+func (c *MQClient) UpdateTopicRouterInfoFromNamesrv(topic string) (err error) {
 	_, err = c.updateTopicRouterInfoFromNamesrv(topic)
 	return
 }
 
 // GetMasterBrokerAddr returns the master broker address
-func (c *MqClient) GetMasterBrokerAddr(brokerName string) string {
+func (c *MQClient) GetMasterBrokerAddr(brokerName string) string {
 	return c.brokerAddrs.get(brokerName, rocketmq.MasterID)
 }
 
 // GetMasterBrokerAddrs returns all the master broker addresses
-func (c *MqClient) GetMasterBrokerAddrs() []string {
+func (c *MQClient) GetMasterBrokerAddrs() []string {
 	return c.brokerAddrs.getByBrokerID(rocketmq.MasterID)
 }
 
@@ -280,7 +282,7 @@ type FindBrokerResult struct {
 
 // FindBrokerAddr finds the broker address, returns the address with specified broker id first
 // otherwise, returns any one
-func (c *MqClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
+func (c *MQClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
 	*FindBrokerResult, error,
 ) {
 	addr := c.brokerAddrs.get(brokerName, hintBrokerID)
@@ -300,7 +302,7 @@ func (c *MqClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bo
 }
 
 // FindAnyBrokerAddr returns any broker whose name is the specified name
-func (c *MqClient) FindAnyBrokerAddr(brokerName string) (
+func (c *MQClient) FindAnyBrokerAddr(brokerName string) (
 	*FindBrokerResult, error,
 ) {
 	addrData, exist := c.brokerAddrs.anyOneAddrOf(brokerName)
@@ -315,7 +317,7 @@ func (c *MqClient) FindAnyBrokerAddr(brokerName string) (
 	}, nil
 }
 
-func (c *MqClient) getTopicRouteInfo(topic string) (*route.TopicRouter, error) {
+func (c *MQClient) getTopicRouteInfo(topic string) (*route.TopicRouter, error) {
 	var err error
 	l := len(c.NameServerAddrs)
 	for i, cc := rand.Intn(l), l; cc > 0; i, cc = i+1, cc-1 {
@@ -331,7 +333,7 @@ func (c *MqClient) getTopicRouteInfo(topic string) (*route.TopicRouter, error) {
 	return nil, err
 }
 
-func (c *MqClient) updateTopicRouterInfoFromNamesrv(topic string) (updated bool, err error) {
+func (c *MQClient) updateTopicRouterInfoFromNamesrv(topic string) (updated bool, err error) {
 	c.nameSrvMutex.Lock()
 	defer c.nameSrvMutex.Unlock()
 
@@ -364,7 +366,7 @@ func (c *MqClient) updateTopicRouterInfoFromNamesrv(topic string) (updated bool,
 	return true, nil
 }
 
-func (c *MqClient) isDiff(topic string, router *route.TopicRouter) bool {
+func (c *MQClient) isDiff(topic string, router *route.TopicRouter) bool {
 	route.SortBrokerData(router.Brokers)
 	route.SortTopicQueue(router.Queues)
 
@@ -389,11 +391,12 @@ func (c *MqClient) isDiff(topic string, router *route.TopicRouter) bool {
 	return false
 }
 
-func (c *MqClient) selectNamesrv() string {
+func (c *MQClient) selectNamesrv() string {
 	return c.NameServerAddrs[rand.Intn(len(c.NameServerAddrs))]
 }
 
-func (c *MqClient) SendHeartbeat() {
+// SendHeartbeat send the heart beart to the broker server, it locked when sending the data
+func (c *MQClient) SendHeartbeat() {
 	hr := c.prepareHeartbeatData()
 
 	hasConsumer, hasProducer := len(hr.Consumers) != 0, len(hr.Producers) != 0
@@ -436,7 +439,7 @@ func (c *MqClient) SendHeartbeat() {
 	}
 }
 
-func (c *MqClient) prepareHeartbeatData() *rpc.HeartbeatRequest {
+func (c *MQClient) prepareHeartbeatData() *rpc.HeartbeatRequest {
 	ps := c.producers.coll()
 	producers := make([]rpc.Producer, len(ps))
 	for i := range ps {
@@ -473,7 +476,7 @@ func toRPCSubscriptionDatas(datas []*SubscribeData) []*rpc.Data {
 	return subscriptionDatas
 }
 
-func (c *MqClient) cleanOfflineBroker() {
+func (c *MQClient) cleanOfflineBroker() {
 	c.nameSrvMutex.Lock()
 	defer c.nameSrvMutex.Unlock()
 
@@ -497,7 +500,7 @@ func (c *MqClient) cleanOfflineBroker() {
 	}
 }
 
-func (c *MqClient) isBrokerAddrInRouter(addr string) bool {
+func (c *MQClient) isBrokerAddrInRouter(addr string) bool {
 	for _, r := range c.routersOfTopic.Routers() {
 		for _, broker := range r.Brokers {
 			for _, addr1 := range broker.Addresses {
@@ -510,7 +513,7 @@ func (c *MqClient) isBrokerAddrInRouter(addr string) bool {
 	return false
 }
 
-func (c *MqClient) scheduleTasks() {
+func (c *MQClient) scheduleTasks() {
 	c.schedule(10*time.Millisecond, c.PollNameServerInterval, c.updateTopicRoute)
 	c.schedule(time.Second, c.HeartbeatBrokerInterval, func() {
 		c.SendHeartbeat()
@@ -518,7 +521,7 @@ func (c *MqClient) scheduleTasks() {
 	})
 }
 
-func (c *MqClient) schedule(delay, period time.Duration, f func()) {
+func (c *MQClient) schedule(delay, period time.Duration, f func()) {
 	c.Add(1)
 	go func() {
 		defer c.Done()
@@ -556,7 +559,7 @@ OUT:
 	return r
 }
 
-func (c *MqClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
+func (c *MQClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
 	switch cmd.Code {
 	case rpc.NotifyConsumerIdsChanged:
 		for _, co := range c.consumers.coll() {
@@ -588,18 +591,17 @@ func (c *MqClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Comman
 	return true
 }
 
-func (c *MqClient) RemotingClient() remote.Client {
-	return c.Client
-}
-
-func (c *MqClient) AdminCount() int {
+// AdminCount return the registered admin count
+func (c *MQClient) AdminCount() int {
 	return c.admins.size()
 }
 
-func (c *MqClient) ConsumerCount() int {
+// ConsumerCount return the registered consumer count
+func (c *MQClient) ConsumerCount() int {
 	return c.consumers.size()
 }
 
-func (c *MqClient) ProducerCount() int {
+// ProducerCount return the registered producer count
+func (c *MQClient) ProducerCount() int {
 	return c.producers.size()
 }

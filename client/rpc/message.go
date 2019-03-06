@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -157,7 +158,7 @@ type PullResponse struct {
 func PullMessageSync(
 	client remote.Client, addr string, header *PullHeader, to time.Duration,
 ) (
-	pr *PullResponse, err *Error,
+	pr *PullResponse, err error,
 ) {
 	cmd, e := client.RequestSync(addr, remote.NewCommand(PullMessage, header), to)
 	if err != nil {
@@ -355,4 +356,44 @@ func QueryOffsetByTimestamp(
 	}
 
 	return offset, nil
+}
+
+type registerFilterBody struct {
+	ClientID      string         `json:"clientId"`
+	Group         string         `json:"group"`
+	SubscribeData *SubscribeData `json:"subscriptionData "`
+}
+
+// SubscribeData subscription information
+type SubscribeData struct {
+	Topic   string   `json:"topic"`
+	Expr    string   `json:"subString"`
+	Typ     string   `json:"expressionType"`
+	Tags    []string `json:"tagsSet"`
+	Codes   []uint32 `json:"codeSet"`
+	Version int64    `json:"subVersion"`
+}
+
+// RegisterFilter register the filter to the broker
+func RegisterFilter(
+	client remote.Client, addr, group, clientID string, subData *SubscribeData, to time.Duration,
+) error {
+	b, err := json.Marshal(registerFilterBody{
+		Group:         group,
+		SubscribeData: subData,
+		ClientID:      clientID,
+	})
+	if err != nil {
+		return dataError(err)
+	}
+	cmd, err := client.RequestSync(addr, remote.NewCommandWithBody(CheckClientConfig, nil, b), to)
+	if err != nil {
+		return requestError(err)
+	}
+
+	if cmd.Code != Success {
+		return brokerError(cmd)
+	}
+
+	return nil
 }

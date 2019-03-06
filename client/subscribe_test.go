@@ -45,7 +45,7 @@ func TestData(t *testing.T) {
 }
 
 func TestDataTable(t *testing.T) {
-	dt := NewDataTable()
+	dt := NewSubcribeTable()
 
 	prev := dt.Put("topic", &SubscribeData{})
 	assert.Nil(t, prev)

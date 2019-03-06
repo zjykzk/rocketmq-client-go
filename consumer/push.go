@@ -15,12 +15,13 @@ var (
 )
 
 const (
-	defaultMaxCountForQueue                         = 1000
-	defaultMaxSizeForQueue                          = 100
-	defaultMaxCountForTopic                         = -1
-	defaultMaxSizeForTopic                          = -1
+	defaultThresholdCountOfQueue                    = 1000
+	defaultThresholdSizeOfQueue                     = 100
+	defaultThresholdCountOfTopic                    = -1
+	defaultThresholdSizeOfTopic                     = -1
 	defaultPullInterval               time.Duration = 0
-	defaultBatchSize                                = 32
+	defaultConsumeBatchSize                         = 1
+	defaultPullBatchSize                            = 32
 	defaultPostSubscriptionWhenPull   bool          = false
 	defaultConsumeTimeout                           = 15 * time.Minute
 	defaultConsumeMessageBatchMaxSize               = 1
@@ -40,13 +41,14 @@ type PushConsumer struct {
 	LastestConsumeTimestamp time.Time
 	ConsumeTimeout          time.Duration
 
-	MaxCountForQueue int
-	MaxSizeForQueue  int
-	MaxCountForTopic int
-	MaxSizeForTopic  int
+	ThresholdCountOfQueue int
+	ThresholdSizeOfQueue  int
+	ThresholdCountOfTopic int
+	ThresholdSizeOfTopic  int
 
-	PullInterval time.Duration
-	BatchSize    int
+	PullInterval     time.Duration
+	PullBatchSize    int
+	ConsumeBatchSize int
 
 	PostSubscriptionWhenPull   bool
 	ConsumeMessageBatchMaxSize int
@@ -54,13 +56,15 @@ type PushConsumer struct {
 	consumerService        consumerService
 	consumerServiceBuilder func() (consumerService, error)
 
+	subscription map[string]string
+
 	pullService *pullService
 }
 
 func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *PushConsumer {
 	pc := &PushConsumer{
 		consumer: &consumer{
-			Logger: logger,
+			logger: logger,
 			Config: defaultConfig,
 			Server: rocketmq.Server{State: rocketmq.StateCreating},
 		},
@@ -68,16 +72,19 @@ func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 		LastestConsumeTimestamp: defaultLastestConsumeTimestamp,
 		ConsumeTimeout:          defaultConsumeTimeout,
 
-		MaxCountForQueue: defaultMaxCountForQueue,
-		MaxSizeForQueue:  defaultMaxSizeForQueue,
-		MaxCountForTopic: defaultMaxCountForTopic,
-		MaxSizeForTopic:  defaultMaxSizeForTopic,
+		ThresholdCountOfQueue: defaultThresholdCountOfQueue,
+		ThresholdSizeOfQueue:  defaultThresholdSizeOfQueue,
+		ThresholdCountOfTopic: defaultThresholdCountOfTopic,
+		ThresholdSizeOfTopic:  defaultThresholdSizeOfTopic,
 
-		PullInterval: defaultPullInterval,
-		BatchSize:    defaultBatchSize,
+		PullInterval:     defaultPullInterval,
+		ConsumeBatchSize: defaultConsumeBatchSize,
+		PullBatchSize:    defaultPullBatchSize,
 
 		PostSubscriptionWhenPull:   defaultPostSubscriptionWhenPull,
 		ConsumeMessageBatchMaxSize: defaultConsumeMessageBatchMaxSize,
+
+		subscription: make(map[string]string, 16),
 	}
 	pc.NameServerAddrs = namesrvAddrs
 	pc.FromWhere = consumeFromLastOffset
@@ -98,6 +105,9 @@ func NewConcurrentConsumer(
 ) (
 	pc *PushConsumer, err error,
 ) {
+	if userConsumer == nil {
+		return nil, errors.New("empty consumer service")
+	}
 	pc = newPushConsumer(group, namesrvAddrs, logger)
 
 	pc.consumerServiceBuilder = func() (consumerService, error) {
@@ -110,53 +120,114 @@ func NewConcurrentConsumer(
 			},
 			consumeTimeout: pc.ConsumeTimeout,
 			consumer:       userConsumer,
-			batchSize:      pc.BatchSize,
+			batchSize:      pc.ConsumeBatchSize,
 		})
 	}
 	return
 }
 
 func (pc *PushConsumer) start() error {
-	// TODO
-	// check group
-	// check config
-
-	pc.Logger.Info("start pull consumer")
-	if pc.GroupName == "" {
-		return errors.New("start push consumer error:empty group")
+	pc.logger.Info("start pull consumer")
+	err := pc.checkConfig()
+	if err != nil {
+		return err
 	}
 
-	err := pc.consumer.start()
+	pc.subscribe()
+
+	err = pc.consumer.start()
 	if err != nil {
 		return err
 	}
 
 	pc.consumerService, err = pc.consumerServiceBuilder()
 	if err != nil {
-		pc.Logger.Errorf("build consumer service error:%s", err)
+		pc.logger.Errorf("build consumer service error:%s", err)
 		return err
 	}
 
 	pc.pullService, err = newPullService(pullServiceConfig{
 		messagePuller: pc,
-		logger:        pc.Logger,
+		logger:        pc.logger,
 	})
+	if err != nil {
+		return err
+	}
 
-	// TODO
-	// register subscriptaion & retry topic
-	// update topic subscibe info when subscription changed
-	// check client in broker
-	// shend heart beat
-	// reblance immediately
-	pc.Logger.Infof("start pull consumer:%s success", pc.GroupName)
+	pc.updateTopicRouterInfoFromNamesrv()
+	pc.registerFilter()
+	pc.client.SendHeartbeat()
+	pc.ReblanceQueue()
+	pc.logger.Infof("start pull consumer:%s success", pc.GroupName)
 	return nil
 }
 
+func (pc *PushConsumer) checkConfig() error {
+	if len(pc.subscription) == 0 {
+		return errors.New("empty subcription")
+	}
+
+	if pc.ThresholdCountOfQueue < 1 || pc.ThresholdCountOfQueue > 65535 {
+		return errors.New("ThresholdCountOfQueue out of the range [1, 65535]")
+	}
+
+	if pc.ThresholdSizeOfQueue < 1 || pc.ThresholdSizeOfQueue > 1024 {
+		return errors.New("ThresholdSizeOfQueue out of the range [1, 1024]")
+	}
+
+	thresholdCountOfTopic := pc.ThresholdCountOfTopic
+	if thresholdCountOfTopic != -1 && (thresholdCountOfTopic < 1 || thresholdCountOfTopic > 6553500) {
+		return errors.New("ThresholdCountOfTopic out of the range [1, 6553500]")
+	}
+
+	thresholdSizeOfTopic := pc.ThresholdSizeOfTopic
+	if thresholdSizeOfTopic != -1 && (thresholdSizeOfTopic < 1 || thresholdSizeOfTopic > 102400) {
+		return errors.New("ThresholdSizeOfTopic out of the range [1, 102400]")
+	}
+
+	if pc.PullInterval < 0 || pc.PullInterval > 65535 {
+		return errors.New("PullInterval out of the range [0, 65535]")
+	}
+
+	if pc.ConsumeBatchSize < 1 || pc.ConsumeBatchSize > 1024 {
+		return errors.New("ConsumeBatchSize out of the range [1, 1024]")
+	}
+
+	if pc.PullBatchSize < 1 || pc.PullBatchSize > 1024 {
+		return errors.New("PullBatchSize out of the range [1, 1024]")
+	}
+
+	return nil
+}
+
+func (pc *PushConsumer) subscribe() {
+	if pc.MessageModel == Clustering {
+		pc.consumer.Subscribe(retryTopic(pc.GroupName), subAll)
+	}
+}
+
+func (pc *PushConsumer) updateTopicRouterInfoFromNamesrv() {
+	for _, topic := range pc.subscribeData.Topics() {
+		pc.client.UpdateTopicRouterInfoFromNamesrv(topic)
+	}
+}
+
+// register the sql filter to the broker
+func (pc *PushConsumer) registerFilter() {
+	for _, d := range pc.subscribeData.Datas() {
+		if IsTag(d.Typ) {
+			continue
+		}
+
+		pc.client.RegisterFilter(pc.GroupName, d)
+	}
+}
+
 func (pc *PushConsumer) shutdown() {
-	pc.Logger.Info("shutdown push consumer ")
+	pc.logger.Info("shutdown push consumer ")
 	pc.consumer.shutdown()
 	pc.pullService.shutdown()
-	pc.Logger.Info("shutdown push consumer OK")
+	pc.logger.Info("shutdown push consumer OK")
 }
 
 // SendBack sends the message to the broker, the message will be consumed again after the at
@@ -168,7 +239,7 @@ func (pc *PushConsumer) SendBack(m *message.Ext, delayLevel int, broker string) 
 func (pc *PushConsumer) reblance(topic string) {
 	allQueues, newQueues, err := pc.reblanceQueue(topic)
 	if err != nil {
-		pc.Logger.Errorf("reblance queue error:%s", err)
+		pc.logger.Errorf("reblance queue error:%s", err)
 		return
 	}
 	if len(allQueues) == 0 {
@@ -202,12 +273,12 @@ func (pc *PushConsumer) updateProcessTable(topic string, mqs []*message.Queue) b
 		pc.offseter.removeOffset(mq)
 		offset, err := pc.computeWhereToPull(mq)
 		if err != nil {
-			pc.Logger.Errorf("compute where to pull the message error:%s", err)
+			pc.logger.Errorf("compute where to pull the message error:%s", err)
 			continue
 		}
 
 		if pq, ok := pc.consumerService.insertNewMessageQueue(mq); ok {
-			pc.Logger.Infof("reblance: %s, new message queue added:%s", pc.Group(), mq)
+			pc.logger.Infof("reblance: %s, new message queue added:%s", pc.Group(), mq)
 			pullRequests = append(pullRequests, pullRequest{
 				group:        pc.Group(),
 				nextOffset:   offset,
@@ -244,7 +315,7 @@ NEXT:
 func (pc *PushConsumer) updateSubscribeVersion(topic string) {
 	data := pc.subscribeData.Get(topic)
 	newVersion := time.Now().UnixNano() / int64(time.Millisecond)
-	pc.Logger.Infof(
+	pc.logger.Infof(
 		"[%s] reblance changed, update version from %d to %d",
 		topic, data.Version, newVersion,
 	)
@@ -272,7 +343,7 @@ func (pc *PushConsumer) computeFromLastOffset(mq *message.Queue) (int64, error) 
 		return offset, nil
 	}
 
-	pc.Logger.Errorf("read LAST offset of %s, from the store error:%s", mq, err)
+	pc.logger.Errorf("read LAST offset of %s, from the store error:%s", mq, err)
 	if err != errOffsetNotExist {
 		return 0, err
 	}
@@ -290,7 +361,7 @@ func (pc *PushConsumer) computeFromFirstOffset(mq *message.Queue) (int64, error)
 		return offset, nil
 	}
 
-	pc.Logger.Errorf("read FIRST offset of %s, from the store error:%s", mq, err)
+	pc.logger.Errorf("read FIRST offset of %s, from the store error:%s", mq, err)
 	if err == errOffsetNotExist {
 		return 0, nil
 	}
@@ -304,7 +375,7 @@ func (pc *PushConsumer) computeFromTimestamp(mq *message.Queue) (int64, error) {
 		return offset, nil
 	}
 
-	pc.Logger.Errorf("read TIMESTAMP offset of %s, from the store error:%s", mq, err)
+	pc.logger.Errorf("read TIMESTAMP offset of %s, from the store error:%s", mq, err)
 	if err != errOffsetNotExist {
 		return 0, err
 	}
@@ -322,7 +393,7 @@ func (pc *PushConsumer) searchOffset(mq *message.Queue) (int64, error) {
 	if r, err := pc.client.FindBrokerAddr(broker, rocketmq.MasterID, true); err == nil {
 		addr = r.Addr
 	} else {
-		pc.Logger.Errorf("find broker for error:%s", err)
+		pc.logger.Errorf("find broker for error:%s", err)
 		return 0, err
 	}
 
@@ -336,20 +407,20 @@ func (pc *PushConsumer) updateThresholdOfQueue() {
 	if queueCount <= 0 {
 		return
 	}
-	if pc.MaxCountForTopic != -1 {
-		maxCountForQueue := pc.MaxCountForTopic / queueCount
+	if pc.ThresholdCountOfTopic != -1 {
+		maxCountForQueue := pc.ThresholdCountOfTopic / queueCount
 		if maxCountForQueue < 1 {
 			maxCountForQueue = 1
 		}
-		pc.MaxCountForQueue = maxCountForQueue
+		pc.ThresholdCountOfQueue = maxCountForQueue
 	}
 
-	if pc.MaxSizeForTopic != -1 {
-		maxSizeForQueue := pc.MaxSizeForTopic / queueCount
+	if pc.ThresholdSizeOfTopic != -1 {
+		maxSizeForQueue := pc.ThresholdSizeOfTopic / queueCount
 		if maxSizeForQueue < 1 {
 			maxSizeForQueue = 1
 		}
-		pc.MaxSizeForQueue = maxSizeForQueue
+		pc.ThresholdSizeOfQueue = maxSizeForQueue
 	}
 }
 

@@ -69,3 +69,7 @@ func printGraph(s string) {
 	f.WriteString(fmt.Sprintf("digraph G{%s}\n", s))
 	f.Close()
 }
+
+func clearGraph() {
+	os.Remove("dot.dot")
+}

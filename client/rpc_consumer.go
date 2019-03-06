@@ -7,6 +7,6 @@ import (
 )
 
 // GetConsumerIDs get the client id from the broker wraper
-func (c *MqClient) GetConsumerIDs(addr, group string, to time.Duration) (ids []string, err error) {
+func (c *MQClient) GetConsumerIDs(addr, group string, to time.Duration) (ids []string, err error) {
 	return rpc.GetConsumerIDs(c.Client, addr, group, to)
 }

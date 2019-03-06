@@ -72,11 +72,11 @@ func (p *pullByQueue) Run(args []string) {
 		&message.Queue{BrokerName: p.broker, QueueID: uint8(p.queueID), Topic: p.topic},
 		p.tags, p.offset, p.maxCount)
 	if err != nil {
-		fmt.Printf("Error:%v\n", err)
+		fmt.Printf("pull error:%s\n", err)
 		return
 	}
 	fmt.Printf("message count:%d\n", len(pr.Messages))
-	fmt.Printf("detal=%v\n", pr)
+	fmt.Printf("detail=%v\n", pr)
 }
 
 func (p *pullByQueue) Usage() {

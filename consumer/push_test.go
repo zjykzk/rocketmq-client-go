@@ -63,12 +63,13 @@ func TestNewPushConsumer(t *testing.T) {
 	assert.Equal(t, pc.MaxReconsumeTimes, defaultPushMaxReconsumeTimes)
 	assert.Equal(t, pc.LastestConsumeTimestamp, defaultLastestConsumeTimestamp)
 	assert.Equal(t, pc.ConsumeTimeout, defaultConsumeTimeout)
-	assert.Equal(t, pc.MaxCountForQueue, defaultMaxCountForQueue)
-	assert.Equal(t, pc.MaxSizeForQueue, defaultMaxSizeForQueue)
-	assert.Equal(t, pc.MaxCountForTopic, defaultMaxCountForTopic)
-	assert.Equal(t, pc.MaxSizeForTopic, defaultMaxSizeForTopic)
+	assert.Equal(t, pc.ThresholdCountOfQueue, defaultThresholdCountOfQueue)
+	assert.Equal(t, pc.ThresholdSizeOfQueue, defaultThresholdSizeOfQueue)
+	assert.Equal(t, pc.ThresholdCountOfTopic, defaultThresholdCountOfTopic)
+	assert.Equal(t, pc.ThresholdSizeOfTopic, defaultThresholdSizeOfTopic)
 	assert.Equal(t, pc.PullInterval, defaultPullInterval)
-	assert.Equal(t, pc.BatchSize, defaultBatchSize)
+	assert.Equal(t, pc.ConsumeBatchSize, defaultConsumeBatchSize)
+	assert.Equal(t, pc.PullBatchSize, defaultPullBatchSize)
 	assert.Equal(t, pc.PostSubscriptionWhenPull, defaultPostSubscriptionWhenPull)
 	assert.Equal(t, pc.ConsumeMessageBatchMaxSize, defaultConsumeMessageBatchMaxSize)
 }
@@ -82,7 +83,7 @@ func TestUpdateProcessTable(t *testing.T) {
 	mmp := &mockMessagePuller{}
 	pc.pullService, _ = newPullService(pullServiceConfig{
 		messagePuller: mmp,
-		logger:        pc.Logger,
+		logger:        pc.logger,
 	})
 
 	topic := "TestUpdateProcessTable"
@@ -147,30 +148,30 @@ func TestUpdateThresholdOfQueue(t *testing.T) {
 	consumerService.queues = []message.Queue{{}, {QueueID: 1}}
 
 	// divided by queues
-	pc.MaxSizeForTopic, pc.MaxCountForTopic = 10, 20
+	pc.ThresholdSizeOfTopic, pc.ThresholdCountOfTopic = 10, 20
 	pc.updateThresholdOfQueue()
-	assert.Equal(t, 5, pc.MaxSizeForQueue)
-	assert.Equal(t, 10, pc.MaxCountForQueue)
+	assert.Equal(t, 5, pc.ThresholdSizeOfQueue)
+	assert.Equal(t, 10, pc.ThresholdCountOfQueue)
 
 	// less than 1
-	pc.MaxSizeForTopic, pc.MaxCountForTopic = 1, 1
+	pc.ThresholdSizeOfTopic, pc.ThresholdCountOfTopic = 1, 1
 	pc.updateThresholdOfQueue()
-	assert.Equal(t, 1, pc.MaxSizeForQueue)
-	assert.Equal(t, 1, pc.MaxCountForQueue)
+	assert.Equal(t, 1, pc.ThresholdSizeOfQueue)
+	assert.Equal(t, 1, pc.ThresholdCountOfQueue)
 
 	// do nothing
-	pc.MaxSizeForTopic, pc.MaxCountForTopic = -1, -1
-	pc.MaxSizeForQueue, pc.MaxCountForQueue = 12, 34
+	pc.ThresholdSizeOfTopic, pc.ThresholdCountOfTopic = -1, -1
+	pc.ThresholdSizeOfQueue, pc.ThresholdCountOfQueue = 12, 34
 	pc.updateThresholdOfQueue()
-	assert.Equal(t, 12, pc.MaxSizeForQueue)
-	assert.Equal(t, 34, pc.MaxCountForQueue)
+	assert.Equal(t, 12, pc.ThresholdSizeOfQueue)
+	assert.Equal(t, 34, pc.ThresholdCountOfQueue)
 }
 
 func TestUpdateSubscribeVersion(t *testing.T) {
 	pc := newTestConcurrentConsumer()
-	pc.subscribeData = client.NewDataTable()
+	pc.subscribeData = client.NewSubcribeTable()
 	pc.client = &mockMQClient{}
-	pc.Subscribe("TestUpdateSubscribeVersion")
+	pc.Subscribe("TestUpdateSubscribeVersion", subAll)
 
 	t1 := time.Now().UnixNano() / int64(time.Millisecond)
 	pc.updateSubscribeVersion("TestUpdateSubscribeVersion")

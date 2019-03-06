@@ -11,6 +11,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
+	"github.com/zjykzk/rocketmq-client-go/remote"
 )
 
 // PullConsumer consumes the messages using pulling method
@@ -21,6 +22,7 @@ type PullConsumer struct {
 	ConsumerPullTimeout        time.Duration
 	MaxReconsumeTimes          int32
 
+	registerTopics   []string
 	currentMessageQs []*message.Queue
 }
 
@@ -28,7 +30,7 @@ type PullConsumer struct {
 func NewPullConsumer(group string, namesrvAddrs []string, logger log.Logger) *PullConsumer {
 	c := &PullConsumer{
 		consumer: &consumer{
-			Logger: logger,
+			logger: logger,
 			Config: defaultConfig,
 			Server: rocketmq.Server{State: rocketmq.StateCreating},
 		},
@@ -51,24 +53,41 @@ func NewPullConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 
 // Start pull consumer
 func (c *PullConsumer) start() error {
-	c.Logger.Info("start pull consumer")
-	if c.GroupName == "" {
-		return errors.New("start pull consumer error:empty group")
-	}
-
-	err := c.consumer.start()
+	c.logger.Info("start pull consumer")
+	err := c.checkConfig()
 	if err != nil {
+		c.logger.Errorf("check config error:%s", err)
 		return err
 	}
 
-	c.Logger.Infof("start pull consumer:%s success", c.GroupName)
+	err = c.consumer.start()
+	if err != nil {
+		c.logger.Errorf("start consumer error:%s", err)
+		return err
+	}
+	c.subscribe()
+
+	c.logger.Infof("start pull consumer:%s success", c.GroupName)
 	return nil
+}
+
+func (c *PullConsumer) checkConfig() error {
+	if c.ConsumerTimeoutWhenSuspend < c.BrokerSuspendMaxTime {
+		return errors.New("ConsumerTimeoutWhenSuspend when suspend is less than BrokerSuspendMaxTime")
+	}
+	return nil
+}
+
+func (c *PullConsumer) subscribe() {
+	for _, t := range c.registerTopics {
+		c.consumer.Subscribe(t, subAll)
+	}
 }
 
 func (c *PullConsumer) reblance(topic string) {
 	allQueues, newQueues, err := c.reblanceQueue(topic)
 	if err != nil {
-		c.Logger.Errorf("reblance queue error:%s", err)
+		c.logger.Errorf("reblance queue error:%s", err)
 		return
 	}
 	if len(allQueues) == 0 {
@@ -77,8 +96,8 @@ func (c *PullConsumer) reblance(topic string) {
 
 	c.offseter.updateQueues(newQueues...)
 
-	if c.MessageQueueChanged != nil && messageQueueChanged(c.currentMessageQs, newQueues) {
-		c.MessageQueueChanged.Changed(topic, allQueues, newQueues)
+	if c.messageQueueChanger != nil && messageQueueChanged(c.currentMessageQs, newQueues) {
+		c.messageQueueChanger.Change(topic, allQueues, newQueues)
 	}
 	c.currentMessageQs = newQueues
 }
@@ -125,25 +144,24 @@ func (c *PullConsumer) PullSync(q *message.Queue, expr string, offset int64, max
 
 func (c *PullConsumer) pullSync(
 	q *message.Queue, expr string, offset int64, maxCount int, block bool,
-) (*PullResult, error) {
-	addr, err := c.client.FindBrokerAddr(q.BrokerName, c.selectBrokerID(q), false)
+) (
+	*PullResult, error,
+) {
+	addr, err := c.findPullBrokerAddr(q)
 	if err != nil {
-		c.client.UpdateTopicRouterInfoFromNamesrv(q.Topic)
-		addr, err = c.client.FindBrokerAddr(q.BrokerName, c.selectBrokerID(q), false)
-		if err != nil {
-			return nil, err
-		}
+		c.logger.Errorf("find pull address of %s error:%s", q, err)
+		return nil, err
 	}
 
 	resp, err := c.client.PullMessageSync(
-		addr.Addr,
+		addr,
 		&rpc.PullHeader{
 			ConsumerGroup:        c.GroupName,
 			Topic:                q.Topic,
 			QueueID:              q.QueueID,
 			QueueOffset:          offset,
 			MaxCount:             int32(maxCount),
-			SysFlag:              buildPull(false, block, true),
+			SysFlag:              buildPullFlag(false, block, true),
 			CommitOffset:         0,
 			SuspendTimeoutMillis: int64(c.BrokerSuspendMaxTime / time.Millisecond),
 			Subscription:         expr,
@@ -151,8 +169,8 @@ func (c *PullConsumer) pullSync(
 			ExpressionType:       ExprTypeTag,
 		},
 		c.ConsumerPullTimeout)
-
 	if err != nil {
+		c.logger.Errorf("pull message sync error:%s", err)
 		return nil, err
 	}
 
@@ -162,30 +180,47 @@ func (c *PullConsumer) pullSync(
 		MinOffset:       resp.MinOffset,
 		MaxOffset:       resp.MaxOffset,
 		Messages:        resp.Messages,
-	}
-	switch resp.Code {
-	case rpc.Success:
-		pr.Status = Found
-	case rpc.PullNotFound:
-		pr.Status = NoNewMessage
-		return pr, nil
-	case rpc.PullRetryImmediately:
-		pr.Status = NoMatchedMessage
-		return pr, nil
-	case rpc.PullOffsetMoved:
-		pr.Status = OffsetIllegal
-		return pr, nil
-	default:
-		panic("BUG:unprocess code:" + strconv.Itoa(int(resp.Code)))
+		Status:          calcStatusFromCode(resp.Code),
 	}
 
 	tags := ParseTags(expr)
-	if len(tags) == 0 {
-		return pr, nil
+	if len(tags) > 0 {
+		pr.Messages = filterMessage(pr.Messages, tags)
 	}
 
-	filterMsgs := make([]*message.Ext, 0, len(pr.Messages))
-	for _, m := range pr.Messages {
+	return pr, nil
+}
+
+func (c *PullConsumer) findPullBrokerAddr(q *message.Queue) (string, error) {
+	addr, err := c.client.FindBrokerAddr(q.BrokerName, c.selectBrokerID(q), false)
+	if err != nil {
+		c.client.UpdateTopicRouterInfoFromNamesrv(q.Topic)
+		addr, err = c.client.FindBrokerAddr(q.BrokerName, c.selectBrokerID(q), false)
+		if err != nil {
+			return "", err
+		}
+	}
+	return addr.Addr, err
+}
+
+func calcStatusFromCode(code remote.Code) PullStatus {
+	switch code {
+	case rpc.Success:
+		return Found
+	case rpc.PullNotFound:
+		return NoNewMessage
+	case rpc.PullRetryImmediately:
+		return NoMatchedMessage
+	case rpc.PullOffsetMoved:
+		return OffsetIllegal
+	default:
+		panic("BUG:unprocess code:" + strconv.Itoa(int(code)))
+	}
+}
+
+func filterMessage(msgs []*message.Ext, tags []string) []*message.Ext {
+	needMsgs := make([]*message.Ext, 0, len(msgs))
+	for _, m := range msgs {
 		tag := m.GetTags()
 		if tag == "" {
 			continue
@@ -193,14 +228,12 @@ func (c *PullConsumer) pullSync(
 
 		for _, t := range tags {
 			if tag == t {
-				filterMsgs = append(filterMsgs, m)
+				needMsgs = append(needMsgs, m)
 				break
 			}
 		}
 	}
-
-	pr.Messages = filterMsgs
-	return pr, nil
+	return needMsgs
 }
 
 // RunningInfo returns the consumter's running information
@@ -208,9 +241,9 @@ func (c *PullConsumer) RunningInfo() client.RunningInfo {
 	millis := time.Millisecond
 	prop := map[string]string{
 		"consumerGroup":                    c.GroupName,
-		"brokerSuspendMaxTimeMillis":       strconv.FormatInt(int64(c.BrokerSuspendMaxTime/millis), 10),
-		"consumerTimeoutMillisWhenSuspend": strconv.FormatInt(int64(c.ConsumerTimeoutWhenSuspend/millis), 10),
-		"consumerPullTimeoutMillis":        strconv.FormatInt(int64(c.ConsumerPullTimeout/millis), 10),
+		"brokerSuspendMaxTimeMillis":       dtoMillisa(c.BrokerSuspendMaxTime),
+		"consumerTimeoutMillisWhenSuspend": dtoMillisa(c.ConsumerTimeoutWhenSuspend),
+		"consumerPullTimeoutMillis":        dtoMillisa(c.ConsumerPullTimeout),
 		"messageModel":                     c.MessageModel.String(),
 		"registerTopics":                   strings.Join(c.subscribeData.Topics(), ", "),
 		"unitMode":                         strconv.FormatBool(c.IsUnitMode),
@@ -224,6 +257,10 @@ func (c *PullConsumer) RunningInfo() client.RunningInfo {
 		Properties:    prop,
 		Subscriptions: c.Subscriptions(),
 	}
+}
+
+func dtoMillisa(d time.Duration) string {
+	return strconv.FormatInt(int64(d/time.Millisecond), 10)
 }
 
 // SendBack send back message
@@ -259,4 +296,10 @@ func (c *PullConsumer) SendBack(
 		Topic:             m.Topic,
 		MaxReconsumeTimes: c.MaxReconsumeTimes,
 	}, time.Second*3)
+}
+
+// Register register the message queue changed event of the topics
+func (c *PullConsumer) Register(topics []string, listener MessageQueueChanger) {
+	c.messageQueueChanger = listener
+	c.registerTopics = topics
 }

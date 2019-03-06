@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -37,7 +38,7 @@ type messageQueueReblancer interface {
 
 // MessageQueueChanger the callback when the consume queue is changed
 type MessageQueueChanger interface {
-	Changed(topic string, all, divided []*message.Queue)
+	Change(topic string, all, divided []*message.Queue)
 }
 
 // Config the configuration of consumer
@@ -50,7 +51,8 @@ type Config struct {
 }
 
 const (
-	defaultInstanceName = "DEFAULT"
+	defaultInstanceName  = "DEFAULT"
+	defaultConsumerGroup = "DEFAULT_CONSUMER"
 )
 
 var defaultConfig = Config{
@@ -66,9 +68,9 @@ var defaultConfig = Config{
 type consumer struct {
 	Config
 	rocketmq.Server
-	MessageQueueChanged MessageQueueChanger
+	messageQueueChanger MessageQueueChanger
 
-	subscribeQueues *client.QueueTable
+	subscribeQueues *client.SubscribeQueueTable
 	subscribeData   *client.SubscribeDataTable
 	topicRouters    *route.TopicRouterTable
 	reblancer       messageQueueReblancer
@@ -85,55 +87,50 @@ type consumer struct {
 
 	client mqClient
 
-	Logger log.Logger
+	logger log.Logger
 }
 
 // Start the works of consumer
 func (c *consumer) start() (err error) {
-	// TODO
-	// check group
-	// check config
+	err = c.checkConfig()
+	if err != nil {
+		return
+	}
 
 	c.ClientIP, err = rocketmq.GetIPStr()
 	if err != nil {
-		c.Logger.Errorf("no ip")
+		c.logger.Errorf("no ip")
 		return
 	}
 
 	c.updateInstanceName()
 
 	c.subscribeQueues = client.NewQueueTable()
-	c.subscribeData = client.NewDataTable()
+	c.subscribeData = client.NewSubcribeTable()
 	c.topicRouters = route.NewTopicRouterTable()
 	c.brokerSuggester.table = make(map[string]int32, 32)
 
-	c.ClientID = client.BuildMQClientID(c.ClientIP, c.UnitName, c.InstanceName)
-	c.client, err = client.NewMQClient(
-		&client.Config{
-			HeartbeatBrokerInterval: c.HeartbeatBrokerInterval,
-			PollNameServerInterval:  c.PollNameServerInterval,
-			NameServerAddrs:         c.NameServerAddrs,
-		}, c.ClientID, c.Logger)
+	err = c.buildMQClient()
 	if err != nil {
-		c.Logger.Errorf("new MQ client error:%s", err)
+		c.logger.Errorf("new MQ client error:%s", err)
 		return
 	}
 
 	err = c.client.RegisterConsumer(c)
 	if err != nil {
-		c.Logger.Errorf("register producer error:%s", err.Error())
+		c.logger.Errorf("register producer error:%s", err.Error())
 		return
 	}
 
 	err = c.client.Start()
 	if err != nil {
-		c.Logger.Errorf("start mq client error:%s", err)
+		c.logger.Errorf("start mq client error:%s", err)
 		return
 	}
 
 	err = c.initOffset()
 	if err != nil {
-		c.Logger.Errorf("initialize the offset error:%s", err)
+		c.logger.Errorf("initialize the offset error:%s", err)
 		return
 	}
 
@@ -141,6 +138,35 @@ func (c *consumer) start() (err error) {
 	c.exitChan = make(chan struct{})
 
 	c.scheduleTasks()
+	return
+}
+
+func (c *consumer) checkConfig() error {
+	err := rocketmq.CheckGroup(c.GroupName)
+	if err != nil {
+		return err
+	}
+
+	if c.GroupName == defaultConsumerGroup {
+		return errors.New("default consumer group")
+	}
+
+	if c.assigner == nil {
+		return errors.New("empty message queue assigner")
+	}
+
+	return nil
+}
+
+func (c *consumer) buildMQClient() (err error) {
+	c.ClientID = client.BuildMQClientID(c.ClientIP, c.UnitName, c.InstanceName)
+	c.client, err = client.NewMQClient(
+		&client.Config{
+			HeartbeatBrokerInterval: c.HeartbeatBrokerInterval,
+			PollNameServerInterval:  c.PollNameServerInterval,
+			NameServerAddrs:         c.NameServerAddrs,
+		}, c.ClientID, c.logger,
+	)
 	return
 }
 
@@ -157,13 +183,13 @@ func (c *consumer) scheduleTasks() {
 
 // Shutdown the works of consumer
 func (c *consumer) shutdown() {
-	c.Logger.Infof("Shutdown consumer, group:%s, clientID:%s", c.GroupName, c.ClientID)
+	c.logger.Infof("Shutdown consumer, group:%s, clientID:%s", c.GroupName, c.ClientID)
 	c.client.UnregisterConsumer(c.GroupName)
 	c.client.Shutdown()
 	c.offseter.persist()
 	close(c.exitChan)
 	c.Wait()
-	c.Logger.Infof("Shutdown consumer, group:%s, clientID:%s OK", c.GroupName, c.ClientID)
+	c.logger.Infof("Shutdown consumer, group:%s, clientID:%s OK", c.GroupName, c.ClientID)
 }
 
 func (c *consumer) initOffset() (err error) {
@@ -171,7 +197,7 @@ func (c *consumer) initOffset() (err error) {
 	case BroadCasting:
 		c.offseter, err = newLocalStore(localStoreConfig{clientID: c.ClientID, group: c.GroupName})
 	case Clustering:
-		c.offseter, err = newRemoteStore(remoteStoreConfig{offsetOperAdaptor{c}, c.Logger})
+		c.offseter, err = newRemoteStore(remoteStoreConfig{offsetOperAdaptor{c}, c.logger})
 	default:
 		err = fmt.Errorf("unknow message model:%v", c.MessageModel)
 	}
@@ -265,7 +291,7 @@ func (c *consumer) Subscriptions() []*client.SubscribeData {
 func (c *consumer) findBrokerAddrByTopic(topic string) string {
 	tr := c.topicRouters.Get(topic)
 	if tr == nil {
-		c.Logger.Warnf("cannot find topic:%s", topic)
+		c.logger.Warnf("cannot find topic:%s", topic)
 		return ""
 	}
 
@@ -277,12 +303,12 @@ func (c *consumer) findBrokerAddrByTopic(topic string) string {
 	return brokers[rand.Intn(len(brokers))].SelectAddress()
 }
 
-func (c *consumer) Subscribe(topic string) {
+func (c *consumer) Subscribe(topic string, expr string) {
 	if c.subscribeData.Get(topic) != nil {
 		return
 	}
 
-	c.subscribeData.PutIfAbsent(topic, BuildSubscribeData(c.GroupName, topic, ""))
+	c.subscribeData.PutIfAbsent(topic, BuildSubscribeData(c.GroupName, topic, expr))
 }
 
 func (c *consumer) Unsubscribe(topic string) {
@@ -351,7 +377,7 @@ func (c *consumer) QueryMaxOffset(q *message.Queue) (int64, error) {
 func (c *consumer) UpdateOffset(q *message.Queue, offset int64, oneway bool) error {
 	addr, err := c.findBrokerAddr(q.BrokerName, q.Topic, false)
 	if err != nil {
-		c.Logger.Errorf("update offset failed:%s", err)
+		c.logger.Errorf("update offset failed:%s", err)
 		return nil
 	}
 	if oneway {
@@ -363,7 +389,7 @@ func (c *consumer) UpdateOffset(q *message.Queue, offset int64, oneway bool) err
 func (c *consumer) PersistOffset() {
 	err := c.offseter.persist()
 	if err != nil {
-		c.Logger.Errorf("persist consume offset error:%s", err)
+		c.logger.Errorf("persist consume offset error:%s", err)
 	}
 }
 
@@ -373,7 +399,7 @@ func (c *consumer) reblanceClustering(topic string, queues []*message.Queue) (
 	clientIDs := c.getConsumerIDs(topic, c.GroupName)
 	if len(clientIDs) == 0 {
 		err := fmt.Errorf("no client id of group:" + c.GroupName)
-		c.Logger.Warn(err)
+		c.logger.Warn(err)
 		return nil, err
 	}
 
@@ -386,11 +412,11 @@ func (c *consumer) reblanceClustering(topic string, queues []*message.Queue) (
 	divided, err := c.assigner.Assign(c.GroupName, c.ClientID, clientIDs, all)
 	if err != nil {
 		err = fmt.Errorf("reblance %s:%s clients:%v, error:%s", c.GroupName, c.ClientID, clientIDs, err)
-		c.Logger.Error(err)
+		c.logger.Error(err)
 		return nil, err
 	}
 
-	c.Logger.Debugf(
+	c.logger.Debugf(
 		"message queue changed:%s, clientIDs:%v, all:%v, divided:%v",
 		topic, clientIDs, all, divided,
 	)
@@ -405,18 +431,18 @@ func (c *consumer) getConsumerIDs(topic, group string) []string {
 	}
 
 	if addr == "" {
-		c.Logger.Warn("GET CONSUMER IDS: no broker address found")
+		c.logger.Warn("GET CONSUMER IDS: no broker address found")
 		return nil
 	}
 
 	clientIDs, err := c.client.GetConsumerIDs(addr, group, time.Second*3)
 	if err != nil {
-		c.Logger.Errorf("get client ids error:%s, group %s, broker %s", err, group, addr)
+		c.logger.Errorf("get client ids error:%s, group %s, broker %s", err, group, addr)
 		return nil
 	}
 
 	if len(clientIDs) == 0 {
-		c.Logger.Warnf("no consumer ids of %s in broker %s", group, addr)
+		c.logger.Warnf("no consumer ids of %s in broker %s", group, addr)
 	}
 
 	return clientIDs
@@ -425,7 +451,7 @@ func (c *consumer) getConsumerIDs(topic, group string) []string {
 func (c *consumer) reblanceQueue(topic string) ([]*message.Queue, []*message.Queue, error) {
 	queues := c.subscribeQueues.Get(topic)
 	if len(queues) == 0 {
-		c.Logger.Warn("no consumer queue of topic:" + topic)
+		c.logger.Warn("no consumer queue of topic:" + topic)
 		return nil, nil, nil
 	}
 

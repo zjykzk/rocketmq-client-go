@@ -21,7 +21,7 @@ func (f *fakeRemoteClient) RequestSync(string, *remote.Command, time.Duration) (
 	return &f.command, f.requestSyncErr
 }
 
-func fakeClient() *MqClient {
+func fakeClient() *MQClient {
 	c := newMQClient(&Config{}, "", log.Std)
 	c.Client = &fakeRemoteClient{}
 	return c

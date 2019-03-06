@@ -28,7 +28,7 @@ func TestSchedule(t *testing.T) {
 func TestUpdateTopicSubscribe(t *testing.T) {
 	c := &consumer{
 		subscribeQueues: client.NewQueueTable(),
-		subscribeData:   client.NewDataTable(),
+		subscribeData:   client.NewSubcribeTable(),
 		topicRouters:    route.NewTopicRouterTable(),
 	}
 
@@ -56,7 +56,7 @@ func TestUpdateTopicSubscribe(t *testing.T) {
 func TestFindBrokerAddr(t *testing.T) {
 	c := &consumer{
 		topicRouters: route.NewTopicRouterTable(),
-		Logger:       log.Std,
+		logger:       log.Std,
 	}
 
 	topic := "test"
@@ -76,13 +76,13 @@ func TestFindBrokerAddr(t *testing.T) {
 
 func TestSubscribe(t *testing.T) {
 	c := &consumer{
-		subscribeData:   client.NewDataTable(),
+		subscribeData:   client.NewSubcribeTable(),
 		subscribeQueues: client.NewQueueTable(),
 		topicRouters:    route.NewTopicRouterTable(),
 	}
-	c.Subscribe("topic")
+	c.Subscribe("topic", "")
 	assert.Equal(t, 1, len(c.subscribeData.Topics()))
-	c.Subscribe("topic")
+	c.Subscribe("topic", "")
 	assert.Equal(t, 1, len(c.subscribeData.Topics()))
 
 	assert.Equal(t, []string{"topic"}, c.SubscribeTopics())
@@ -95,8 +95,9 @@ func TestSubscribe(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	c := &consumer{
-		Logger: log.Std,
-		Config: defaultConfig,
+		logger:   log.Std,
+		Config:   defaultConfig,
+		assigner: &Averagely{},
 	}
 	c.StartFunc, c.ShutdownFunc = c.start, c.shutdown
 

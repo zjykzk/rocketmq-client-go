@@ -27,18 +27,19 @@ func init() {
 
 type messageQueueChanger struct {
 	consumer *consumer.PullConsumer
+	logger   log.Logger
 }
 
-func (qc *messageQueueChanger) Changed(topic string, all, divided []*message.Queue) {
+func (qc *messageQueueChanger) Change(topic string, all, divided []*message.Queue) {
 	c := qc.consumer
 	for _, q := range divided {
 		for {
 			pr, err := c.PullSync(q, tags, 0, 32)
 			if err != nil {
-				qc.consumer.Logger.Errorf("pull error:%v", err)
+				qc.logger.Errorf("pull error:%v", err)
 				break
 			}
-			c.Logger.Infof("pull %s result:%d", q, len(pr.Messages))
+			qc.logger.Infof("pull %s result:%d", q, len(pr.Messages))
 			break
 		}
 	}
@@ -61,21 +62,21 @@ func main() {
 		println("bad tags:" + tags)
 		return
 	}
-	logger := log.Std
+
+	logger, err := newLogger()
+	if err != nil {
+		return
+	}
+
 	c := consumer.NewPullConsumer("test-group", strings.Split(namesrvAddrs, ","), logger)
 
-	qc := &messageQueueChanger{
-		consumer: c,
-	}
-	c.MessageQueueChanged = qc
-
-	err := c.Start()
+	err = c.Start()
 	if err != nil {
 		fmt.Printf("start consumer error:%v", err)
 		return
 	}
 
-	c.Subscribe(topic)
+	c.Register([]string{topic}, &messageQueueChanger{consumer: c, logger: logger})
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
@@ -83,4 +84,14 @@ func main() {
 	case <-signalChan:
 		c.Shutdown()
 	}
+}
+
+func newLogger() (log.Logger, error) {
+	file, err := os.Create("pullconsumer.log")
+	if err != nil {
+		println("create file error", err.Error())
+		return nil, err
+	}
+
+	return log.New(file, "", log.Ldefault), err
 }

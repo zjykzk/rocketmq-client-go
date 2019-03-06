@@ -7,7 +7,7 @@ const (
 	PullSubscribe
 )
 
-func buildPull(commitOffset, suspend, subscribe bool) (flag int32) {
+func buildPullFlag(commitOffset, suspend, subscribe bool) (flag int32) {
 	if commitOffset {
 		flag |= PullCommitOffset
 	}

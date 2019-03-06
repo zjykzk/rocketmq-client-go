@@ -7,21 +7,21 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
-// QueueTable contains the message queues of topic, the operations is thread-safe
-type QueueTable struct {
+// SubscribeQueueTable contains the message queues of topic, the operations is thread-safe
+type SubscribeQueueTable struct {
 	locker sync.RWMutex
 	table  map[string][]*message.Queue // key: topic
 }
 
 // NewQueueTable creates the QueueTable
-func NewQueueTable() *QueueTable {
-	return &QueueTable{
+func NewQueueTable() *SubscribeQueueTable {
+	return &SubscribeQueueTable{
 		table: make(map[string][]*message.Queue, 128),
 	}
 }
 
 // Put stores the queues and returns the previous queue
-func (t *QueueTable) Put(topic string, q []*message.Queue) []*message.Queue {
+func (t *SubscribeQueueTable) Put(topic string, q []*message.Queue) []*message.Queue {
 	t.locker.Lock()
 	prev := t.table[topic]
 	t.table[topic] = q
@@ -30,7 +30,7 @@ func (t *QueueTable) Put(topic string, q []*message.Queue) []*message.Queue {
 }
 
 // Get returns the queues of the topic
-func (t *QueueTable) Get(topic string) []*message.Queue {
+func (t *SubscribeQueueTable) Get(topic string) []*message.Queue {
 	t.locker.RLock()
 	queues := t.table[topic]
 	t.locker.RUnlock()
@@ -38,7 +38,7 @@ func (t *QueueTable) Get(topic string) []*message.Queue {
 }
 
 // Topics returns the topics
-func (t *QueueTable) Topics() []string {
+func (t *SubscribeQueueTable) Topics() []string {
 	i := 0
 	t.locker.RLock()
 	topics := make([]string, len(t.table))
@@ -51,7 +51,7 @@ func (t *QueueTable) Topics() []string {
 }
 
 // Delete returns the topics
-func (t *QueueTable) Delete(topic string) []*message.Queue {
+func (t *SubscribeQueueTable) Delete(topic string) []*message.Queue {
 	t.locker.Lock()
 	prev, ok := t.table[topic]
 	if ok {
@@ -124,8 +124,8 @@ type SubscribeDataTable struct {
 	table  map[string]*SubscribeData // key: topic
 }
 
-// NewDataTable creates one DataTable
-func NewDataTable() *SubscribeDataTable {
+// NewSubcribeTable creates one DataTable
+func NewSubcribeTable() *SubscribeDataTable {
 	return &SubscribeDataTable{
 		table: make(map[string]*SubscribeData, 8),
 	}

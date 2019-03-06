@@ -10,3 +10,5 @@
 - [ ] consumer long polling
 - [ ] consumer stats manager
 - [ ] vip request
+- [ ] transaction
+- [ ] trace

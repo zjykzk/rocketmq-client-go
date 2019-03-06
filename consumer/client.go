@@ -26,4 +26,5 @@ type mqClient interface {
 	MaxOffset(addr, topic string, queueID uint8, to time.Duration) (int64, *rpc.Error)
 	SearchOffsetByTimestamp(addr, topic string, queueID uint8, timestamp time.Time, to time.Duration) (int64, *rpc.Error)
 	SendHeartbeat()
+	RegisterFilter(group string, subData *client.SubscribeData) error
 }

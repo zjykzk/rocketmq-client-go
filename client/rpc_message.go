@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"math/rand"
 	"strconv"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 )
 
 // SendMessageSync send message to the broker
-func (c *MqClient) SendMessageSync(
+func (c *MQClient) SendMessageSync(
 	broker string, data []byte, header *rpc.SendHeader, timeout time.Duration,
 ) (
 	*rpc.SendResponse, error,
@@ -25,7 +26,7 @@ func (c *MqClient) SendMessageSync(
 }
 
 // PullMessageSync pull message sync
-func (c *MqClient) PullMessageSync(addr string, header *rpc.PullHeader, to time.Duration) (
+func (c *MQClient) PullMessageSync(addr string, header *rpc.PullHeader, to time.Duration) (
 	pr *rpc.PullResponse, err error,
 ) {
 	return rpc.PullMessageSync(c.Client, addr, header, to)
@@ -40,14 +41,14 @@ func (h queryMessageByIDHeader) ToMap() map[string]string {
 }
 
 // QueryMessageByOffset querys the message by message id
-func (c *MqClient) QueryMessageByOffset(addr string, offset int64, to time.Duration) (
+func (c *MQClient) QueryMessageByOffset(addr string, offset int64, to time.Duration) (
 	*message.Ext, error,
 ) {
 	return rpc.QueryMessageByOffset(c.Client, addr, offset, to)
 }
 
 // SendBack send back the message
-func (c *MqClient) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) (err error) {
+func (c *MQClient) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) (err error) {
 	return rpc.SendBack(c.Client, addr, h, to)
 }
 
@@ -68,17 +69,36 @@ type maxOffsetResponse struct {
 }
 
 // MaxOffset returns the max offset in the consume queue
-func (c *MqClient) MaxOffset(addr, topic string, queueID uint8, to time.Duration) (
+func (c *MQClient) MaxOffset(addr, topic string, queueID uint8, to time.Duration) (
 	int64, *rpc.Error,
 ) {
 	return rpc.MaxOffset(c.Client, addr, topic, queueID, to)
 }
 
 // SearchOffsetByTimestamp returns the offset of the specified message queue and the timestamp
-func (c *MqClient) SearchOffsetByTimestamp(
+func (c *MQClient) SearchOffsetByTimestamp(
 	addr, topic string, queueID uint8, timestamp time.Time, to time.Duration,
 ) (
 	int64, *rpc.Error,
 ) {
 	return rpc.QueryOffsetByTimestamp(c.Client, addr, topic, queueID, timestamp, to)
+}
+
+// RegisterFilter register the filter to the broker
+func (c *MQClient) RegisterFilter(group string, subData *SubscribeData) error {
+	router := c.routersOfTopic.Get(subData.Topic)
+	if router == nil {
+		return nil
+	}
+
+	brokers := router.Brokers
+	count := len(brokers)
+	if count <= 0 {
+		return nil
+	}
+
+	broker := brokers[rand.Intn(count)]
+	return rpc.RegisterFilter(
+		c.Client, broker.SelectAddress(), group, c.clientID, (*rpc.SubscribeData)(subData), time.Second*3,
+	)
 }
