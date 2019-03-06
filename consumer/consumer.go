@@ -216,8 +216,8 @@ func (c *consumer) schedule(delay, period time.Duration, f func()) {
 			return
 		}
 
-		ticker := time.NewTicker(period)
 		f()
+		ticker := time.NewTicker(period)
 		for {
 			select {
 			case <-ticker.C:
@@ -395,6 +395,23 @@ func (c *consumer) PersistOffset() {
 	}
 }
 
+func (c *consumer) reblanceQueue(topic string) ([]*message.Queue, []*message.Queue, error) {
+	queues := c.subscribeQueues.Get(topic)
+	if len(queues) == 0 {
+		c.logger.Warn("no consumer queue of topic:" + topic)
+		return nil, nil, nil
+	}
+
+	if c.MessageModel == BroadCasting {
+		return queues, queues, nil
+	}
+	newQueues, err := c.reblanceClustering(topic, queues)
+	if err != nil {
+		return nil, nil, err
+	}
+	return queues, newQueues, nil
+}
+
 func (c *consumer) reblanceClustering(topic string, queues []*message.Queue) (
 	[]*message.Queue, error,
 ) {
@@ -450,25 +467,8 @@ func (c *consumer) getConsumerIDs(topic, group string) []string {
 	return clientIDs
 }
 
-func (c *consumer) reblanceQueue(topic string) ([]*message.Queue, []*message.Queue, error) {
-	queues := c.subscribeQueues.Get(topic)
-	if len(queues) == 0 {
-		c.logger.Warn("no consumer queue of topic:" + topic)
-		return nil, nil, nil
-	}
-
-	if c.MessageModel == BroadCasting {
-		return queues, queues, nil
-	}
-	newQueues, err := c.reblanceClustering(topic, queues)
-	if err != nil {
-		return nil, nil, err
-	}
-	return queues, newQueues, nil
-}
-
 // SendBack send back message
-func (c *consumer) SendBack(m *message.Ext, delayLevel int32, group, brokerName string) error {
+func (c *consumer) SendBack(m *message.Ext, delayLevel int, group, brokerName string) error {
 	if group == "" {
 		group = c.GroupName
 	}
@@ -481,7 +481,7 @@ func (c *consumer) SendBack(m *message.Ext, delayLevel int32, group, brokerName 
 	return c.client.SendBack(addr, &rpc.SendBackHeader{
 		CommitOffset:      m.CommitLogOffset,
 		Group:             group,
-		DelayLevel:        delayLevel,
+		DelayLevel:        int32(delayLevel),
 		MessageID:         m.MsgID,
 		Topic:             m.Topic,
 		MaxReconsumeTimes: c.MaxReconsumeTimes,

@@ -241,22 +241,6 @@ func (c *MQClient) Shutdown() {
 	c.logger.Info("shutdown mqclient END")
 }
 
-func (c *MQClient) updateTopicRoute() {
-	topics := make([]string, 0, 256)
-
-	for _, c := range c.consumers.coll() {
-		topics = union(topics, c.SubscribeTopics())
-	}
-
-	for _, p := range c.producers.coll() {
-		topics = union(topics, p.PublishTopics())
-	}
-
-	for _, t := range topics {
-		c.updateTopicRouterInfoFromNamesrv(t)
-	}
-}
-
 // UpdateTopicRouterInfoFromNamesrv udpate the topic for the producer/consumer from the namesrv
 func (c *MQClient) UpdateTopicRouterInfoFromNamesrv(topic string) (err error) {
 	_, err = c.updateTopicRouterInfoFromNamesrv(topic)
@@ -532,6 +516,7 @@ func (c *MQClient) schedule(delay, period time.Duration, f func()) {
 			return
 		}
 
+		f()
 		ticker := time.NewTicker(period)
 		for {
 			select {
@@ -543,6 +528,22 @@ func (c *MQClient) schedule(delay, period time.Duration, f func()) {
 			}
 		}
 	}()
+}
+
+func (c *MQClient) updateTopicRoute() {
+	topics := make([]string, 0, 256)
+
+	for _, c := range c.consumers.coll() {
+		topics = union(topics, c.SubscribeTopics())
+	}
+
+	for _, p := range c.producers.coll() {
+		topics = union(topics, p.PublishTopics())
+	}
+
+	for _, t := range topics {
+		c.updateTopicRouterInfoFromNamesrv(t)
+	}
 }
 
 func union(s1, s2 []string) []string {

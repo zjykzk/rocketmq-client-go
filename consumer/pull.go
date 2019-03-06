@@ -105,20 +105,24 @@ func messageQueueChanged(qs1, qs2 []*message.Queue) bool {
 		return true
 	}
 
+NEXT_Q1:
 	for _, q1 := range qs1 {
 		for _, q2 := range qs2 {
-			if *q1 != *q2 {
-				return true
+			if *q1 == *q2 {
+				continue NEXT_Q1
 			}
 		}
+		return true
 	}
 
+NEXT_Q2:
 	for _, q2 := range qs2 {
 		for _, q1 := range qs1 {
-			if *q2 != *q1 {
-				return true
+			if *q2 == *q1 {
+				continue NEXT_Q2
 			}
 		}
+		return true
 	}
 
 	return false
@@ -239,9 +243,9 @@ func (c *PullConsumer) RunningInfo() client.RunningInfo {
 	millis := time.Millisecond
 	prop := map[string]string{
 		"consumerGroup":                    c.GroupName,
-		"brokerSuspendMaxTimeMillis":       dtoMillisa(c.BrokerSuspendMaxTime),
-		"consumerTimeoutMillisWhenSuspend": dtoMillisa(c.ConsumerTimeoutWhenSuspend),
-		"consumerPullTimeoutMillis":        dtoMillisa(c.ConsumerPullTimeout),
+		"brokerSuspendMaxTimeMillis":       dToMsStr(c.BrokerSuspendMaxTime),
+		"consumerTimeoutMillisWhenSuspend": dToMsStr(c.ConsumerTimeoutWhenSuspend),
+		"consumerPullTimeoutMillis":        dToMsStr(c.ConsumerPullTimeout),
 		"messageModel":                     c.MessageModel.String(),
 		"registerTopics":                   strings.Join(c.subscribeData.Topics(), ", "),
 		"unitMode":                         strconv.FormatBool(c.IsUnitMode),
@@ -257,12 +261,12 @@ func (c *PullConsumer) RunningInfo() client.RunningInfo {
 	}
 }
 
-func dtoMillisa(d time.Duration) string {
+func dToMsStr(d time.Duration) string {
 	return strconv.FormatInt(int64(d/time.Millisecond), 10)
 }
 
 // Register register the message queue changed event of the topics
 func (c *PullConsumer) Register(topics []string, listener MessageQueueChanger) {
-	c.messageQueueChanger = listener
 	c.registerTopics = topics
+	c.messageQueueChanger = listener
 }

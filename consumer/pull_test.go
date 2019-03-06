@@ -130,4 +130,22 @@ func TestMessageQueueChanged(t *testing.T) {
 		},
 	}
 	assert.False(t, messageQueueChanged(qs1, qs2))
+
+	qs1 = []*message.Queue{
+		{
+			BrokerName: "b2",
+		},
+		{
+			BrokerName: "b1",
+		},
+	}
+	qs2 = []*message.Queue{
+		{
+			BrokerName: "b1",
+		},
+		{
+			BrokerName: "b2",
+		},
+	}
+	assert.False(t, messageQueueChanged(qs1, qs2))
 }
