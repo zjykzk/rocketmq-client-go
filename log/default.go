@@ -28,6 +28,7 @@ const (
 	Ldefault      = Lmodule | Llevel | Lshortfile | LstdFlags
 ) // [prefix][time][level][module][shortfile|longfile]
 
+// log level
 const (
 	Ldebug = iota
 	Linfo

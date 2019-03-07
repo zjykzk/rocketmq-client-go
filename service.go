@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 )
 
+var errNotRunning = errors.New("server not running")
+
 // State job state
 type State int32
 
@@ -71,6 +73,14 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.State.Set(StateStartFailed, StateRunning)
+	return nil
+}
+
+// CheckRuning check the server is under running state, return false if not
+func (s *Server) CheckRuning() error {
+	if s.State.Get() != StateRunning {
+		return errNotRunning
+	}
 	return nil
 }
 

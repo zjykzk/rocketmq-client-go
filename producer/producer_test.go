@@ -44,8 +44,15 @@ func (f *fakeMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
 	return nil
 }
 
-func TestSendHeader(t *testing.T) {
+func newTestProducer() *Producer {
 	p := New("sendHeader", []string{"abc"}, log.Std)
+	p.State = rocketmq.StateRunning
+	p.client = &fakeMQClient{}
+	return p
+}
+
+func TestSendHeader(t *testing.T) {
+	p := newTestProducer()
 	p.CreateTopicKey, p.DefaultTopicQueueNums = "CreateTopicKey", 100
 	m := &messageWrap{Message: &message.Message{Topic: "sendHeader", Flag: 111, Properties: map[string]string{
 		message.PropertyReconsumeTime:     "100",
@@ -79,9 +86,8 @@ func TestSendHeader(t *testing.T) {
 }
 
 func TestSendSync0(t *testing.T) {
-	p := New("sendHeader", []string{"abc"}, log.Std)
-	mqClient := &fakeMQClient{}
-	p.mqclient = mqClient
+	p := newTestProducer()
+	mqClient := p.client.(*fakeMQClient)
 
 	m := &messageWrap{Message: &message.Message{}}
 	// send message sync failed
@@ -110,13 +116,8 @@ func TestSendSync0(t *testing.T) {
 }
 
 func TestSendSync(t *testing.T) {
-	p := New("sendSync", []string{"abc"}, log.Std)
-	p.mqclient = &fakeMQClient{}
+	p := newTestProducer()
 	p.mqFaultStrategy = NewMQFaultStrategy(true)
-
-	defer func() {
-		p.Shutdown()
-	}()
 
 	// empty message
 	sr, err := p.SendSync(nil)
@@ -152,7 +153,7 @@ func TestSendSync(t *testing.T) {
 }
 
 func TestUpdateTopicRouter(t *testing.T) {
-	p := New("TestUpdateTopicRouter", []string{"abc"}, log.Std)
+	p := newTestProducer()
 	topic := "TestUpdateTopicRouter"
 	p.topicPublishInfos.table = make(map[string]*topicPublishInfo)
 	p.UpdateTopicPublish(topic, &route.TopicRouter{
@@ -204,9 +205,8 @@ func TestUpdateTopicRouter(t *testing.T) {
 }
 
 func TestSendMessageWithLatency(t *testing.T) {
-	topic, mqClient := "TestSendMessageWithLatency", &fakeMQClient{}
-	p := New("TestSendMessageWithLatency", []string{"g"}, log.Std)
-	p.mqclient = mqClient
+	p := newTestProducer()
+	topic, mqClient := "TestSendMessageWithLatency", p.client.(*fakeMQClient)
 	p.mqFaultStrategy = NewMQFaultStrategy(true)
 
 	router := &topicPublishInfo{
@@ -225,7 +225,7 @@ func TestSendMessageWithLatency(t *testing.T) {
 }
 
 func TestCompress(t *testing.T) {
-	p := New("TestCompress", []string{"g"}, log.Std)
+	p := newTestProducer()
 
 	// under threshold
 	ok, err := p.tryToCompress(&message.Message{})
@@ -246,7 +246,8 @@ func TestCompress(t *testing.T) {
 }
 
 func TestSendBatch(t *testing.T) {
-	p := New("TestSendBatch", []string{"g"}, log.Std)
+	p := newTestProducer()
 	// bad topic
-	p.SendBatchSync(&message.Batch{})
+	_, err := p.SendBatchSync(&message.Batch{})
+	assert.NotNil(t, err)
 }

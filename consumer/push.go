@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	defaultLastestConsumeTimestamp = time.Now().Add(time.Minute * 30)
+	defaultLastestConsumeTimestamp = time.Now().Add(-time.Minute * 30)
 )
 
 const (
@@ -64,9 +64,10 @@ type PushConsumer struct {
 func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *PushConsumer {
 	pc := &PushConsumer{
 		consumer: &consumer{
-			logger: logger,
-			Config: defaultConfig,
-			Server: rocketmq.Server{State: rocketmq.StateCreating},
+			logger:          logger,
+			Config:          defaultConfig,
+			Server:          rocketmq.Server{State: rocketmq.StateCreating},
+			brokerSuggester: &brokerSuggester{table: make(map[string]int32, 32)},
 		},
 		MaxReconsumeTimes:       defaultPushMaxReconsumeTimes,
 		LastestConsumeTimestamp: defaultLastestConsumeTimestamp,

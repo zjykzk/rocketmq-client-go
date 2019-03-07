@@ -54,19 +54,20 @@ var defaultConfig = Config{
 type Producer struct {
 	Config
 	rocketmq.Server
-	topicPublishInfos topicPublishInfoTable
-	mqclient          mqClient
+	topicPublishInfos *topicPublishInfoTable
+	client            mqClient
 	mqFaultStrategy   *MQFaultStrategy
 
-	Logger log.Logger
+	logger log.Logger
 }
 
 // New creates procuder
 func New(group string, namesrvAddrs []string, logger log.Logger) *Producer {
 	p := &Producer{
-		Config: defaultConfig,
-		Logger: logger,
-		Server: rocketmq.Server{State: rocketmq.StateCreating},
+		Config:            defaultConfig,
+		logger:            logger,
+		Server:            rocketmq.Server{State: rocketmq.StateCreating},
+		topicPublishInfos: &topicPublishInfoTable{table: make(map[string]*topicPublishInfo)},
 	}
 	p.StartFunc, p.ShutdownFunc = p.start, p.shutdown
 	p.GroupName = group
@@ -76,48 +77,49 @@ func New(group string, namesrvAddrs []string, logger log.Logger) *Producer {
 
 // Start producer's worker
 func (p *Producer) start() (err error) {
-	p.Logger.Info("start producer")
-	if p.GroupName != rocketmq.ClientInnerProducerGroup && p.InstanceName == "DEFAULT" {
-		p.InstanceName = strconv.Itoa(os.Getpid())
-	}
+	p.logger.Info("start producer")
+	p.updateInstanceName()
 
 	p.ClientIP, err = rocketmq.GetIPStr()
 	if err != nil {
-		p.Logger.Errorf("no ip")
+		p.logger.Errorf("no ip")
 		return
 	}
 
-	p.topicPublishInfos.table = make(map[string]*topicPublishInfo)
-
 	p.ClientID = client.BuildMQClientID(p.ClientIP, p.UnitName, p.InstanceName)
-	client, err := client.New(
+	p.client, err = client.New(
 		&client.Config{
 			HeartbeatBrokerInterval: p.HeartbeatBrokerInterval,
 			PollNameServerInterval:  p.PollNameServerInterval,
 			NameServerAddrs:         p.NameServerAddrs,
-		}, p.ClientID, p.Logger)
-	p.mqclient = client
+		}, p.ClientID, p.logger)
 	if err != nil {
 		return
 	}
 
-	err = p.mqclient.RegisterProducer(p)
+	err = p.client.RegisterProducer(p)
 	if err != nil {
-		p.Logger.Errorf("register producer error:%s", err.Error())
+		p.logger.Errorf("register producer error:%s", err.Error())
 		return
 	}
 
-	err = p.mqclient.Start()
+	err = p.client.Start()
 	p.mqFaultStrategy = NewMQFaultStrategy(true)
 	return
 }
 
+func (p *Producer) updateInstanceName() {
+	if p.GroupName != rocketmq.ClientInnerProducerGroup && p.InstanceName == "DEFAULT" {
+		p.InstanceName = strconv.Itoa(os.Getpid())
+	}
+}
+
 // Shutdown shutdown the producer
 func (p *Producer) shutdown() {
-	p.Logger.Info("shutdown producer:" + p.GroupName)
-	p.mqclient.UnregisterProducer(p.GroupName)
-	p.mqclient.Shutdown()
-	p.Logger.Infof("shutdown producer:%s END", p.GroupName)
+	p.logger.Info("shutdown producer:" + p.GroupName)
+	p.client.UnregisterProducer(p.GroupName)
+	p.client.Shutdown()
+	p.logger.Infof("shutdown producer:%s END", p.GroupName)
 }
 
 // Group returns the GroupName of the producer
@@ -139,7 +141,7 @@ func (p *Producer) Unpublish(topic string) bool {
 // it always update the publish data, even no message sent under the topic by now
 // the router must not be nil
 func (p *Producer) UpdateTopicPublish(topic string, router *route.TopicRouter) {
-	p.Logger.Debugf("update topic publish %s %s", topic, router.String())
+	p.logger.Debugf("update topic publish %s %s", topic, router.String())
 	route.SortTopicQueue(router.Queues) // for the select consume queue is not duplicated by brokername
 	qs := make([]*message.Queue, 0, 8)
 	for _, q := range router.Queues {
@@ -177,7 +179,7 @@ func (p *Producer) UpdateTopicPublish(topic string, router *route.TopicRouter) {
 
 	prev := p.topicPublishInfos.put(topic, tp)
 	if prev != nil {
-		p.Logger.Info("UpdateTopicPublish prev is not null, " + prev.String())
+		p.logger.Info("UpdateTopicPublish prev is not null, " + prev.String())
 	}
 }
 
@@ -191,6 +193,11 @@ func (p *Producer) NeedUpdateTopicPublish(topic string) bool {
 // SendSync sends the message
 // the message must not be nil
 func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err error) {
+	err = p.CheckRuning()
+	if err != nil {
+		return
+	}
+
 	return p.sendSync(&messageWrap{Message: m})
 }
 
@@ -254,9 +261,9 @@ func (p *Producer) getRouters(topic string) (*topicPublishInfo, error) {
 	}
 
 	if !pi.hasQueue() {
-		err := p.mqclient.UpdateTopicRouterInfoFromNamesrv(topic)
+		err := p.client.UpdateTopicRouterInfoFromNamesrv(topic)
 		if err != nil {
-			p.Logger.Errorf("update topic router from namesrv error:%s", err)
+			p.logger.Errorf("update topic router from namesrv error:%s", err)
 			return nil, err
 		}
 		pi = p.topicPublishInfos.get(topic)
@@ -294,8 +301,8 @@ func (p *Producer) sendMessageWithLatency(
 
 		if err != nil {
 			p.mqFaultStrategy.UpdateFault(q.BrokerName, cost, true)
-			p.Logger.Errorf("resend at once %s RT:%s, Queue:%s, err %s", m.GetUniqID(), cost, q, err)
-			p.Logger.Warn(m.String())
+			p.logger.Errorf("resend at once %s RT:%s, Queue:%s, err %s", m.GetUniqID(), cost, q, err)
+			p.logger.Warn(m.String())
 			continue
 		}
 
@@ -303,7 +310,7 @@ func (p *Producer) sendMessageWithLatency(
 		goto END
 	}
 
-	p.Logger.Errorf("send %d times, still failed, cost %s, topic:%s, sendBrokers:%v",
+	p.logger.Errorf("send %d times, still failed, cost %s, topic:%s, sendBrokers:%v",
 		retryCount-1, time.Now().Sub(startPoint), m.Topic, brokersSent[1:])
 END:
 
@@ -313,11 +320,11 @@ END:
 func (p *Producer) sendMessageWithQueueSync(m *messageWrap, q *message.Queue, sysFlag int32) (
 	*SendResult, error,
 ) {
-	resp, err := p.mqclient.SendMessageSync(
+	resp, err := p.client.SendMessageSync(
 		q.BrokerName, m.Body, p.buildSendHeader(m, q, sysFlag), p.SendMsgTimeout,
 	)
 	if err != nil {
-		p.Logger.Errorf("request send message %s sync error:%v", m.String(), err)
+		p.logger.Errorf("request send message %s sync error:%v", m.String(), err)
 		return nil, err
 	}
 
@@ -332,7 +339,7 @@ func (p *Producer) sendMessageWithQueueSync(m *messageWrap, q *message.Queue, sy
 	case rpc.Success:
 		sendResult = &SendResult{Status: OK}
 	default:
-		p.Logger.Errorf("broker reponse code:%d, error:%s", resp.Code, resp.Message)
+		p.logger.Errorf("broker reponse code:%d, error:%s", resp.Code, resp.Message)
 		return nil, fmt.Errorf("code:%d, err:%s", resp.Code, resp.Message)
 	}
 

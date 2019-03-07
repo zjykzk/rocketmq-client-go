@@ -82,7 +82,7 @@ type consumer struct {
 
 	runnerInfo func() client.RunningInfo
 
-	brokerSuggester brokerSuggester
+	brokerSuggester *brokerSuggester
 
 	sync.WaitGroup
 	exitChan chan struct{}
@@ -110,7 +110,6 @@ func (c *consumer) start() (err error) {
 	c.subscribeQueues = client.NewQueueTable()
 	c.subscribeData = client.NewSubcribeTable()
 	c.topicRouters = route.NewTopicRouterTable()
-	c.brokerSuggester.table = make(map[string]int32, 32)
 
 	err = c.buildMQClient()
 	if err != nil {

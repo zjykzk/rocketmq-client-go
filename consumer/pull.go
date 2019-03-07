@@ -29,9 +29,10 @@ type PullConsumer struct {
 func NewPullConsumer(group string, namesrvAddrs []string, logger log.Logger) *PullConsumer {
 	c := &PullConsumer{
 		consumer: &consumer{
-			logger: logger,
-			Config: defaultConfig,
-			Server: rocketmq.Server{State: rocketmq.StateCreating},
+			logger:          logger,
+			Config:          defaultConfig,
+			Server:          rocketmq.Server{State: rocketmq.StateCreating},
+			brokerSuggester: &brokerSuggester{table: make(map[string]int32, 32)},
 		},
 	}
 	c.StartFunc, c.ShutdownFunc = c.start, c.shutdown
@@ -139,6 +140,9 @@ func (c *PullConsumer) PullSyncBlockIfNotFound(
 ) (
 	*PullResult, error,
 ) {
+	if err := c.CheckRuning(); err != nil {
+		return nil, err
+	}
 	return c.pullSync(q, expr, offset, maxCount, true)
 }
 
@@ -146,6 +150,9 @@ func (c *PullConsumer) PullSyncBlockIfNotFound(
 func (c *PullConsumer) PullSync(q *message.Queue, expr string, offset int64, maxCount int) (
 	*PullResult, error,
 ) {
+	if err := c.CheckRuning(); err != nil {
+		return nil, err
+	}
 	return c.pullSync(q, expr, offset, maxCount, false)
 }
 

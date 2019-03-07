@@ -50,6 +50,7 @@ func newTestConcurrentConsumer() *PushConsumer {
 	pc, err := NewConcurrentConsumer(
 		"test push consumer", []string{"dummy"}, &fakeConcurrentlyConsumer{}, log.Std,
 	)
+	pc.client = &fakeMQClient{}
 	if err != nil {
 		panic(err)
 	}
@@ -78,7 +79,6 @@ func TestUpdateProcessTable(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	offseter, consumerService := &fakeOffseter{}, &fakeConsumerService{}
 	pc.offseter, pc.consumerService = offseter, consumerService
-	pc.client = &fakeMQClient{}
 
 	mmp := &fakeMessagePuller{}
 	pc.pullService, _ = newPullService(pullServiceConfig{
