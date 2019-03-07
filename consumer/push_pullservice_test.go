@@ -8,19 +8,19 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
-type mockMessagePuller struct {
+type fakeMessagePuller struct {
 	runPull bool
 }
 
-func (p *mockMessagePuller) pull(r *pullRequest) { p.runPull = true }
+func (p *fakeMessagePuller) pull(r *pullRequest) { p.runPull = true }
 
 func TestNewPullService(t *testing.T) {
 	_, err := newPullService(pullServiceConfig{})
 	assert.NotNil(t, err)
-	_, err = newPullService(pullServiceConfig{messagePuller: &mockMessagePuller{}})
+	_, err = newPullService(pullServiceConfig{messagePuller: &fakeMessagePuller{}})
 	assert.NotNil(t, err)
 	ps, err := newPullService(pullServiceConfig{
-		messagePuller: &mockMessagePuller{},
+		messagePuller: &fakeMessagePuller{},
 		logger:        log.Std,
 	})
 	assert.Nil(t, err)
@@ -30,7 +30,7 @@ func TestNewPullService(t *testing.T) {
 
 func TestPullService(t *testing.T) {
 	ps, err := newPullService(pullServiceConfig{
-		messagePuller: &mockMessagePuller{},
+		messagePuller: &fakeMessagePuller{},
 		logger:        log.Std,
 	})
 	if err != nil {

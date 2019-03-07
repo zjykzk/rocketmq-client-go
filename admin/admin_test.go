@@ -47,18 +47,18 @@ func TestAdmin(t *testing.T) {
 	assert.Equal(t, 0, a.client.AdminCount())
 }
 
-type mockMQClient struct {
-	mockBrokerAddrs       map[string]string
+type fakeMQClient struct {
+	fakeBrokerAddrs       map[string]string
 	createTopicErrorCount int
 }
 
-func (c *mockMQClient) AdminCount() int                    { return 0 }
-func (c *mockMQClient) RegisterAdmin(a client.Admin) error { return nil }
-func (c *mockMQClient) UnregisterAdmin(group string)       {}
-func (c *mockMQClient) FindBrokerAddr(broker string, hintID int32, lock bool) (
+func (c *fakeMQClient) AdminCount() int                    { return 0 }
+func (c *fakeMQClient) RegisterAdmin(a client.Admin) error { return nil }
+func (c *fakeMQClient) UnregisterAdmin(group string)       {}
+func (c *fakeMQClient) FindBrokerAddr(broker string, hintID int32, lock bool) (
 	*client.FindBrokerResult, error,
 ) {
-	addr, exist := c.mockBrokerAddrs[broker]
+	addr, exist := c.fakeBrokerAddrs[broker]
 	if !exist {
 		return nil, errors.New("not exist")
 	}
@@ -66,41 +66,41 @@ func (c *mockMQClient) FindBrokerAddr(broker string, hintID int32, lock bool) (
 	return &client.FindBrokerResult{Addr: addr}, nil
 }
 
-func (c *mockMQClient) Start() error { return nil }
-func (c *mockMQClient) Shutdown()    {}
-func (c *mockMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
-	c.mockBrokerAddrs[broker] = "mock address"
+func (c *fakeMQClient) Start() error { return nil }
+func (c *fakeMQClient) Shutdown()    {}
+func (c *fakeMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
+	c.fakeBrokerAddrs[broker] = "fake address"
 	return nil
 }
-func (c *mockMQClient) CreateOrUpdateTopic(addr string, header *rpc.CreateOrUpdateTopicHeader, to time.Duration) error {
+func (c *fakeMQClient) CreateOrUpdateTopic(addr string, header *rpc.CreateOrUpdateTopicHeader, to time.Duration) error {
 	if c.createTopicErrorCount == 0 {
 		return nil
 	}
 	c.createTopicErrorCount--
 	return errors.New("waiting")
 }
-func (c *mockMQClient) DeleteTopicInBroker(addr, topic string, timeout time.Duration) error {
+func (c *fakeMQClient) DeleteTopicInBroker(addr, topic string, timeout time.Duration) error {
 	return nil
 }
-func (c *mockMQClient) DeleteTopicInNamesrv(addr, topic string, timeout time.Duration) error {
+func (c *fakeMQClient) DeleteTopicInNamesrv(addr, topic string, timeout time.Duration) error {
 	return nil
 }
-func (c *mockMQClient) GetBrokerClusterInfo(addr string, timeout time.Duration) (*route.ClusterInfo, error) {
+func (c *fakeMQClient) GetBrokerClusterInfo(addr string, timeout time.Duration) (*route.ClusterInfo, error) {
 	return nil, nil
 }
-func (c *mockMQClient) QueryMessageByOffset(addr string, offset int64, timeout time.Duration) (*message.Ext, error) {
+func (c *fakeMQClient) QueryMessageByOffset(addr string, offset int64, timeout time.Duration) (*message.Ext, error) {
 	return nil, nil
 }
-func (c *mockMQClient) MaxOffset(addr, topic string, queueID uint8, timeout time.Duration) (int64, *rpc.Error) {
+func (c *fakeMQClient) MaxOffset(addr, topic string, queueID uint8, timeout time.Duration) (int64, *rpc.Error) {
 	return maxOffset, nil
 }
-func (c *mockMQClient) GetConsumerIDs(addr, group string, timeout time.Duration) ([]string, error) {
+func (c *fakeMQClient) GetConsumerIDs(addr, group string, timeout time.Duration) ([]string, error) {
 	return nil, nil
 }
 
 func testMaxoffset(a *Admin, t *testing.T) {
-	a.client = &mockMQClient{
-		mockBrokerAddrs: make(map[string]string),
+	a.client = &fakeMQClient{
+		fakeBrokerAddrs: make(map[string]string),
 	}
 	offset, err := a.MaxOffset(&message.Queue{BrokerName: broker, Topic: topic, QueueID: queueID})
 	assert.Nil(t, err)
@@ -108,12 +108,12 @@ func testMaxoffset(a *Admin, t *testing.T) {
 }
 
 func createTopicOrUpdate(a *Admin, t *testing.T) {
-	a.client = &mockMQClient{createTopicErrorCount: 0}
+	a.client = &fakeMQClient{createTopicErrorCount: 0}
 	assert.Nil(t, a.CreateOrUpdateTopic("", "", 0, 1))
 
-	a.client = &mockMQClient{createTopicErrorCount: 3}
+	a.client = &fakeMQClient{createTopicErrorCount: 3}
 	assert.Nil(t, a.CreateOrUpdateTopic("", "", 0, 1))
 
-	a.client = &mockMQClient{createTopicErrorCount: 6}
+	a.client = &fakeMQClient{createTopicErrorCount: 6}
 	assert.NotNil(t, a.CreateOrUpdateTopic("", "", 0, 1))
 }

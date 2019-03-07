@@ -4,10 +4,8 @@ import (
 	"errors"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/zjykzk/rocketmq-client-go/log"
-	"github.com/zjykzk/rocketmq-client-go/remote"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -39,11 +37,11 @@ func TestMQClient(t *testing.T) {
 	defer client.Shutdown()
 
 	t.Run("[un]register consumer", func(t *testing.T) {
-		assert.NotNil(t, client.RegisterConsumer(&mockConsumer{}))
-		assert.Nil(t, client.RegisterConsumer(&mockConsumer{"group"}))
-		assert.NotNil(t, client.RegisterConsumer(&mockConsumer{"group"}))
+		assert.NotNil(t, client.RegisterConsumer(&fakeConsumer{}))
+		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{"group"}))
+		assert.NotNil(t, client.RegisterConsumer(&fakeConsumer{"group"}))
 		assert.Equal(t, 1, client.ConsumerCount())
-		assert.Nil(t, client.RegisterConsumer(&mockConsumer{"1group"}))
+		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{"1group"}))
 		assert.Equal(t, 2, client.ConsumerCount())
 
 		client.UnregisterConsumer("group")
@@ -53,11 +51,11 @@ func TestMQClient(t *testing.T) {
 	})
 
 	t.Run("[un]register producer", func(t *testing.T) {
-		assert.NotNil(t, client.RegisterProducer(&mockProducer{}))
-		assert.Nil(t, client.RegisterProducer(&mockProducer{"group"}))
-		assert.NotNil(t, client.RegisterProducer(&mockProducer{"group"}))
+		assert.NotNil(t, client.RegisterProducer(&fakeProducer{}))
+		assert.Nil(t, client.RegisterProducer(&fakeProducer{"group"}))
+		assert.NotNil(t, client.RegisterProducer(&fakeProducer{"group"}))
 		assert.Equal(t, 1, client.ProducerCount())
-		assert.Nil(t, client.RegisterProducer(&mockProducer{"1group"}))
+		assert.Nil(t, client.RegisterProducer(&fakeProducer{"1group"}))
 		assert.Equal(t, 2, client.ProducerCount())
 
 		client.UnregisterProducer("group")
@@ -66,10 +64,10 @@ func TestMQClient(t *testing.T) {
 	})
 
 	t.Run("[un]register admin", func(t *testing.T) {
-		assert.NotNil(t, client.RegisterAdmin(&mockAdmin{}))
-		assert.Nil(t, client.RegisterAdmin(&mockAdmin{"group"}))
+		assert.NotNil(t, client.RegisterAdmin(&fakeAdmin{}))
+		assert.Nil(t, client.RegisterAdmin(&fakeAdmin{"group"}))
 		assert.Equal(t, 1, client.AdminCount())
-		assert.Nil(t, client.RegisterAdmin(&mockAdmin{"1group"}))
+		assert.Nil(t, client.RegisterAdmin(&fakeAdmin{"1group"}))
 		assert.Equal(t, 2, client.AdminCount())
 
 		client.UnregisterAdmin("group")
@@ -78,12 +76,12 @@ func TestMQClient(t *testing.T) {
 	})
 
 	t.Run("prepare heartbeat data", func(t *testing.T) {
-		err := client1.RegisterProducer(&mockProducer{"p0"})
+		err := client1.RegisterProducer(&fakeProducer{"p0"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = client1.RegisterProducer(&mockProducer{"p1"})
-		mc := &mockConsumer{"c0"}
+		err = client1.RegisterProducer(&fakeProducer{"p1"})
+		mc := &fakeConsumer{"c0"}
 		client1.RegisterConsumer(mc)
 
 		hd := client1.prepareHeartbeatData()
@@ -132,18 +130,18 @@ func TestMQClient(t *testing.T) {
 	})
 
 	t.Run("update topic router from namesrv", func(t *testing.T) {
-		mockRemoteClient := &mockRemoteClient{}
-		client.Client = mockRemoteClient
+		remoteClient := &fakeRemoteClient{}
+		client.Client = remoteClient
 
 		// bad request
-		mockRemoteClient.requestSyncErr = errors.New("bad request")
+		remoteClient.requestSyncErr = errors.New("bad request")
 		updated, err := client.updateTopicRouterInfoFromNamesrv("t")
 		assert.False(t, updated)
 		assert.NotNil(t, err)
-		mockRemoteClient.requestSyncErr = nil
+		remoteClient.requestSyncErr = nil
 
 		// add
-		mockRemoteClient.command.Body = []byte(`{}`)
+		remoteClient.command.Body = []byte(`{}`)
 		updated, err = client.updateTopicRouterInfoFromNamesrv("t")
 		assert.Nil(t, err)
 		assert.True(t, updated)
@@ -154,21 +152,8 @@ func TestMQClient(t *testing.T) {
 		assert.False(t, updated)
 
 		// change
-		mockRemoteClient.command.Body = []byte(`{"OrderTopicConf":"new"}`)
+		remoteClient.command.Body = []byte(`{"OrderTopicConf":"new"}`)
 		updated, _ = client.updateTopicRouterInfoFromNamesrv("t")
 		assert.True(t, updated)
 	})
-}
-
-type mockRemoteClient struct {
-	*remote.MockClient
-
-	requestSyncErr error
-	command        remote.Command
-}
-
-func (m *mockRemoteClient) RequestSync(addr string, cmd *remote.Command, timeout time.Duration) (
-	*remote.Command, error,
-) {
-	return &m.command, m.requestSyncErr
 }

@@ -9,22 +9,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type mockTopicRouter struct {
+type fakeTopicRouter struct {
 	writeCount     int
 	nextQueueIndex uint32
 }
 
-func (tr *mockTopicRouter) SelectOneQueue() *message.Queue {
+func (tr *fakeTopicRouter) SelectOneQueue() *message.Queue {
 	return &message.Queue{
 		BrokerName: "SEL",
 		Topic:      "SEL",
 	}
 }
-func (tr *mockTopicRouter) NextQueueIndex() uint32 {
+func (tr *fakeTopicRouter) NextQueueIndex() uint32 {
 	tr.nextQueueIndex++
 	return tr.nextQueueIndex
 }
-func (tr *mockTopicRouter) MessageQueues() []*message.Queue {
+func (tr *fakeTopicRouter) MessageQueues() []*message.Queue {
 	return []*message.Queue{
 		&message.Queue{
 			BrokerName: "b1",
@@ -43,14 +43,14 @@ func (tr *mockTopicRouter) MessageQueues() []*message.Queue {
 		},
 	}
 }
-func (tr *mockTopicRouter) WriteQueueCount(broker string) int {
+func (tr *fakeTopicRouter) WriteQueueCount(broker string) int {
 	tr.writeCount++
 	if tr.writeCount == 1 {
 		return 0
 	}
 	return tr.writeCount
 }
-func (tr *mockTopicRouter) SelectOneQueueNotOf(lastBroker string) *message.Queue {
+func (tr *fakeTopicRouter) SelectOneQueueNotOf(lastBroker string) *message.Queue {
 	return &message.Queue{
 		BrokerName: "HINT",
 		Topic:      "HINT",
@@ -85,7 +85,7 @@ func TestLatency(t *testing.T) {
 }
 
 func TestSelectOneQueue(t *testing.T) {
-	fs, tp := NewMQFaultStrategy(false), &mockTopicRouter{}
+	fs, tp := NewMQFaultStrategy(false), &fakeTopicRouter{}
 
 	q := fs.SelectOneQueue(tp, "b1")
 	assert.Equal(t, "HINT", q.BrokerName)

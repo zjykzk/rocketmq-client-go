@@ -78,49 +78,32 @@ func TestSendHeader(t *testing.T) {
 	assert.Equal(t, "", m.Properties[message.PropertyMaxReconsumeTimes])
 }
 
-type mockMQClient struct {
-	brokerAddr       map[string]string
-	p                *Producer
-	updateTopicCount int
-
-	updateTopicRouterInfoFromNamesrvErr error
-	topicRouter                         *route.TopicRouter
-}
-
-func (c *mockMQClient) GetMasterBrokerAddr(broker string) string {
-	return c.brokerAddr[broker]
-}
-
-func (c *mockMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
-	return c.updateTopicRouterInfoFromNamesrvErr
-}
-
 func TestSendSync0(t *testing.T) {
 	p := NewProducer("sendHeader", []string{"abc"}, log.Std)
-	mockMQClient := &fakeMQClient{}
-	p.mqclient = mockMQClient
+	mqClient := &fakeMQClient{}
+	p.mqclient = mqClient
 
 	m := &messageWrap{Message: &message.Message{}}
 	// send message sync failed
-	mockMQClient.sendMessageSyncErr = errors.New("bad send")
+	mqClient.sendMessageSyncErr = errors.New("bad send")
 	sr, err := p.sendMessageWithQueueSync(m, &message.Queue{BrokerName: "not exist"}, 123)
 	assert.NotNil(t, err)
-	mockMQClient.sendMessageSyncErr = nil
+	mqClient.sendMessageSyncErr = nil
 
 	// disk timeout
-	mockMQClient.sendResponse.Code = rpc.FlushDiskTimeout
+	mqClient.sendResponse.Code = rpc.FlushDiskTimeout
 	sr, err = p.sendMessageWithQueueSync(m, &message.Queue{BrokerName: "ok"}, 123)
 	assert.Nil(t, err)
 	assert.Equal(t, FlushDiskTimeout, sr.Status)
 
 	// slave timeout
-	mockMQClient.sendResponse.Code = rpc.FlushSlaveTimeout
+	mqClient.sendResponse.Code = rpc.FlushSlaveTimeout
 	sr, err = p.sendMessageWithQueueSync(m, &message.Queue{BrokerName: "ok"}, 123)
 	assert.Nil(t, err)
 	assert.Equal(t, FlushSlaveTimeout, sr.Status)
 
 	// slave not available
-	mockMQClient.sendResponse.Code = rpc.SlaveNotAvailable
+	mqClient.sendResponse.Code = rpc.SlaveNotAvailable
 	sr, err = p.sendMessageWithQueueSync(m, &message.Queue{BrokerName: "ok"}, 123)
 	assert.Nil(t, err)
 	assert.Equal(t, SlaveNotAvailable, sr.Status)

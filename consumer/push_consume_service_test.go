@@ -13,9 +13,9 @@ import (
 func newTestConsumeService(t *testing.T) *consumeService {
 	cs, err := newConsumeService(consumeServiceConfig{
 		group:           "test consume service",
-		messageSendBack: &mockSendback{},
+		messageSendBack: &fakeSendback{},
 		logger:          log.Std,
-		offseter:        &mockOffseter{},
+		offseter:        &fakeOffseter{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -32,15 +32,15 @@ func TestNewService(t *testing.T) {
 	assert.NotNil(t, err)
 
 	_, err = newConsumeService(consumeServiceConfig{
-		group: "g", logger: log.Std, messageSendBack: &mockSendback{},
+		group: "g", logger: log.Std, messageSendBack: &fakeSendback{},
 	})
 	assert.NotNil(t, err)
 
 	_, err = newConsumeService(consumeServiceConfig{
 		group:           "g",
 		logger:          log.Std,
-		messageSendBack: &mockSendback{},
-		offseter:        &mockOffseter{},
+		messageSendBack: &fakeSendback{},
+		offseter:        &fakeOffseter{},
 	})
 	assert.Nil(t, err)
 }
@@ -53,7 +53,7 @@ func TestRemoveOldMessageQueue(t *testing.T) {
 	assert.False(t, cs.removeOldMessageQueue(mq))
 }
 
-type mockProcessQueue struct {
+type fakeProcessQueue struct {
 	processQueue
 
 	other int
@@ -61,8 +61,8 @@ type mockProcessQueue struct {
 
 func TestDropExpiredProcessQueue(t *testing.T) {
 	cs := newTestConsumeService(t)
-	cs.processQueues.Store(message.Queue{}, &mockProcessQueue{})
-	cs.processQueues.Store(message.Queue{QueueID: 1}, &mockProcessQueue{
+	cs.processQueues.Store(message.Queue{}, &fakeProcessQueue{})
+	cs.processQueues.Store(message.Queue{QueueID: 1}, &fakeProcessQueue{
 		processQueue{lastPullTime: time.Now().Add(time.Second)},
 		1,
 	})

@@ -15,7 +15,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
-type mockConsumerService struct {
+type fakeConsumerService struct {
 	queues    []message.Queue
 	runInsert bool
 
@@ -25,11 +25,11 @@ type mockConsumerService struct {
 	removeRet bool
 }
 
-func (m *mockConsumerService) messageQueues() []message.Queue {
+func (m *fakeConsumerService) messageQueues() []message.Queue {
 	return m.queues
 }
 
-func (m *mockConsumerService) removeOldMessageQueue(mq *message.Queue) bool {
+func (m *fakeConsumerService) removeOldMessageQueue(mq *message.Queue) bool {
 	nqs := make([]message.Queue, 0, len(m.queues))
 	for _, q := range m.queues {
 		if q != *mq {
@@ -40,7 +40,7 @@ func (m *mockConsumerService) removeOldMessageQueue(mq *message.Queue) bool {
 	return m.removeRet
 }
 
-func (m *mockConsumerService) insertNewMessageQueue(mq *message.Queue) (*processQueue, bool) {
+func (m *fakeConsumerService) insertNewMessageQueue(mq *message.Queue) (*processQueue, bool) {
 	m.runInsert = true
 	m.queues = append(m.queues, *mq)
 	return m.pt, m.insertRet
@@ -48,7 +48,7 @@ func (m *mockConsumerService) insertNewMessageQueue(mq *message.Queue) (*process
 
 func newTestConcurrentConsumer() *PushConsumer {
 	pc, err := NewConcurrentConsumer(
-		"test push consumer", []string{"dummy"}, &mockConcurrentlyConsumer{}, log.Std,
+		"test push consumer", []string{"dummy"}, &fakeConcurrentlyConsumer{}, log.Std,
 	)
 	if err != nil {
 		panic(err)
@@ -76,11 +76,11 @@ func TestNewPushConsumer(t *testing.T) {
 
 func TestUpdateProcessTable(t *testing.T) {
 	pc := newTestConcurrentConsumer()
-	mockOffseter, mockConsumerService := &mockOffseter{}, &mockConsumerService{}
-	pc.offseter, pc.consumerService = mockOffseter, mockConsumerService
+	offseter, consumerService := &fakeOffseter{}, &fakeConsumerService{}
+	pc.offseter, pc.consumerService = offseter, consumerService
 	pc.client = &fakeMQClient{}
 
-	mmp := &mockMessagePuller{}
+	mmp := &fakeMessagePuller{}
 	pc.pullService, _ = newPullService(pullServiceConfig{
 		messagePuller: mmp,
 		logger:        pc.logger,
@@ -97,16 +97,16 @@ func TestUpdateProcessTable(t *testing.T) {
 	newMQs := []*message.Queue{{}, {QueueID: 1}}
 	// insert all
 	t.Log("add all")
-	mockConsumerService.insertRet = true
+	consumerService.insertRet = true
 	test(newMQs, newMQs, true)
 
 	// insert compute pull offset failed
 	t.Log("insert, but donot insert")
-	mockOffseter.readOffsetErr = errors.New("bad readoffset")
+	offseter.readOffsetErr = errors.New("bad readoffset")
 	expected := newMQs
 	newMQs = append(newMQs, &message.Queue{QueueID: 3})
 	test(newMQs, expected, false)
-	mockOffseter.readOffsetErr = nil
+	offseter.readOffsetErr = nil
 
 	// do nothing
 	t.Log("do nothing")
@@ -116,7 +116,7 @@ func TestUpdateProcessTable(t *testing.T) {
 	// remove
 	t.Log("remove")
 	newMQs = []*message.Queue{{}}
-	mockConsumerService.removeRet = true
+	consumerService.removeRet = true
 	test(newMQs, newMQs, true)
 	test([]*message.Queue{}, []*message.Queue{}, true)
 
@@ -142,7 +142,7 @@ func assertMQs(t *testing.T, mqs1 []*message.Queue, mqs2 []message.Queue) {
 
 func TestUpdateThresholdOfQueue(t *testing.T) {
 	pc := newTestConcurrentConsumer()
-	consumerService := &mockConsumerService{}
+	consumerService := &fakeConsumerService{}
 	pc.consumerService = consumerService
 
 	consumerService.queues = []message.Queue{{}, {QueueID: 1}}
@@ -182,10 +182,10 @@ func TestUpdateSubscribeVersion(t *testing.T) {
 
 func TestReblance(t *testing.T) {
 	pc := newTestConcurrentConsumer()
-	mockConsumerService := &mockConsumerService{}
-	pc.offseter = &mockOffseter{}
+	consumerService := &fakeConsumerService{}
+	pc.offseter = &fakeOffseter{}
 	pc.client = &fakeMQClient{}
-	pc.consumerService = mockConsumerService
+	pc.consumerService = consumerService
 
 	pc.topicRouters = route.NewTopicRouterTable()
 	pc.subscribeQueues = client.NewQueueTable()
@@ -196,7 +196,7 @@ func TestReblance(t *testing.T) {
 
 	// no queue
 	pc.reblance("TestReblance")
-	assert.False(t, mockConsumerService.runInsert)
+	assert.False(t, consumerService.runInsert)
 
 	// new queues
 	pc.subscribeQueues.Put("TestReblance", []*message.Queue{{}})
@@ -204,50 +204,50 @@ func TestReblance(t *testing.T) {
 		Brokers: []*route.Broker{{Addresses: map[int32]string{0: "addr"}}},
 	})
 	pc.reblance("TestReblance")
-	assert.True(t, mockConsumerService.runInsert)
+	assert.True(t, consumerService.runInsert)
 }
 
 func TestComputeFromLastOffset(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockMQClient := &mockOffseter{}, &fakeMQClient{}
-	pc.offseter, pc.client = mockOffseter, mockMQClient
+	offseter, mqClient := &fakeOffseter{}, &fakeMQClient{}
+	pc.offseter, pc.client = offseter, mqClient
 
 	pc.FromWhere = consumeFromLastOffset
-	mockMQClient.brokderAddr = "mock"
+	mqClient.brokderAddr = "fake"
 
 	q := &message.Queue{}
 	// from offseter
-	mockOffseter.offset = 2
+	offseter.offset = 2
 	offset, err := pc.computeFromLastOffset(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(2), offset)
 
 	// from remote
-	mockOffseter.readOffsetErr = errOffsetNotExist
-	mockMQClient.maxOffset = 22
+	offseter.readOffsetErr = errOffsetNotExist
+	mqClient.maxOffset = 22
 	offset, err = pc.computeWhereToPull(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(22), offset)
 
 	// bad readoffset
-	mockOffseter.readOffsetErr = errors.New("bad readoffset")
+	offseter.readOffsetErr = errors.New("bad readoffset")
 	offset, err = pc.computeWhereToPull(q)
-	assert.Equal(t, mockOffseter.readOffsetErr, err)
+	assert.Equal(t, offseter.readOffsetErr, err)
 
 	// retry topic
 	q.Topic = rocketmq.RetryGroupTopicPrefix + "t"
-	mockOffseter.readOffsetErr = errOffsetNotExist
+	offseter.readOffsetErr = errOffsetNotExist
 	offset, err = pc.computeWhereToPull(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(0), offset)
 
 	// bad maxoffset offset
 	q.Topic = ""
-	mockMQClient.maxOffsetErr = &rpc.Error{}
+	mqClient.maxOffsetErr = &rpc.Error{}
 	_, err = pc.computeWhereToPull(q)
-	assert.Equal(t, mockMQClient.maxOffsetErr, err)
-	mockMQClient.maxOffsetErr = nil
+	assert.Equal(t, mqClient.maxOffsetErr, err)
+	mqClient.maxOffsetErr = nil
 
 	// retry topic
 	q.Topic = rocketmq.RetryGroupTopicPrefix + "t"
@@ -259,27 +259,27 @@ func TestComputeFromLastOffset(t *testing.T) {
 func TestComputeFromFirstOffset(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockMQClient := &mockOffseter{}, &fakeMQClient{}
-	pc.offseter, pc.client = mockOffseter, mockMQClient
+	offseter, mqClient := &fakeOffseter{}, &fakeMQClient{}
+	pc.offseter, pc.client = offseter, mqClient
 
 	pc.FromWhere = consumeFromFirstOffset
-	mockMQClient.brokderAddr = "mock"
+	mqClient.brokderAddr = "fake"
 
 	q := &message.Queue{}
 	// from offseter
-	mockOffseter.offset = 2
+	offseter.offset = 2
 	offset, err := pc.computeFromFirstOffset(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(2), offset)
 
 	// not exist
-	mockOffseter.readOffsetErr = errOffsetNotExist
+	offseter.readOffsetErr = errOffsetNotExist
 	offset, err = pc.computeFromFirstOffset(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(0), offset)
 
 	// bad readoffset
-	mockOffseter.readOffsetErr = errors.New("bad readoffset")
+	offseter.readOffsetErr = errors.New("bad readoffset")
 	offset, err = pc.computeFromFirstOffset(q)
 	assert.NotNil(t, err)
 }
@@ -287,43 +287,43 @@ func TestComputeFromFirstOffset(t *testing.T) {
 func TestComputeFromTimestamp(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	mockOffseter, mockMQClient := &mockOffseter{}, &fakeMQClient{}
-	pc.offseter, pc.client = mockOffseter, mockMQClient
+	offseter, mqClient := &fakeOffseter{}, &fakeMQClient{}
+	pc.offseter, pc.client = offseter, mqClient
 
 	pc.FromWhere = consumeFromTimestamp
-	mockMQClient.brokderAddr = "mock"
+	mqClient.brokderAddr = "fake"
 
 	q := &message.Queue{}
 	// from offseter
-	mockOffseter.offset = 2
+	offseter.offset = 2
 	offset, err := pc.computeFromTimestamp(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(2), offset)
 
 	// offseter search error
-	mockOffseter.readOffsetErr = errors.New("bad read offset")
+	offseter.readOffsetErr = errors.New("bad read offset")
 	_, err = pc.computeFromTimestamp(q)
-	assert.Equal(t, mockOffseter.readOffsetErr, err)
-	mockOffseter.readOffsetErr = nil
+	assert.Equal(t, offseter.readOffsetErr, err)
+	offseter.readOffsetErr = nil
 
 	// not exist and retry topic
-	mockMQClient.maxOffset = 100
+	mqClient.maxOffset = 100
 	q.Topic = rocketmq.RetryGroupTopicPrefix
-	mockOffseter.readOffsetErr = errOffsetNotExist
+	offseter.readOffsetErr = errOffsetNotExist
 	offset, err = pc.computeFromTimestamp(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(100), offset)
 
 	// not exist, search remote suc
 	q.Topic = ""
-	mockMQClient.searchOffsetByTimestampRet = 200
+	mqClient.searchOffsetByTimestampRet = 200
 	offset, err = pc.computeFromTimestamp(q)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(200), offset)
 
 	// not exist search failed
-	mockMQClient.searchOffsetByTimestampErr = &rpc.Error{}
+	mqClient.searchOffsetByTimestampErr = &rpc.Error{}
 	offset, err = pc.computeFromTimestamp(q)
-	assert.Equal(t, mockMQClient.searchOffsetByTimestampErr, err)
-	mockMQClient.searchOffsetByTimestampErr = nil
+	assert.Equal(t, mqClient.searchOffsetByTimestampErr, err)
+	mqClient.searchOffsetByTimestampErr = nil
 }

@@ -9,11 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type mockRunnable struct {
+type fakeRunnable struct {
 	id int
 }
 
-func (m *mockRunnable) run() {}
+func (m *fakeRunnable) run() {}
 
 func TestDelayedWorkQueue(t *testing.T) {
 	q := newDelayedWorkQueue()
@@ -31,12 +31,12 @@ func TestDelayedWorkQueue(t *testing.T) {
 
 	assert.Equal(t, 0, q.Len())
 
-	q.offer(&mockRunnable{id: 1}, time.Millisecond*10)
-	q.offer(&mockRunnable{id: 2}, time.Millisecond*1)
-	q.offer(&mockRunnable{id: 3}, time.Millisecond*20)
+	q.offer(&fakeRunnable{id: 1}, time.Millisecond*10)
+	q.offer(&fakeRunnable{id: 2}, time.Millisecond*1)
+	q.offer(&fakeRunnable{id: 3}, time.Millisecond*20)
 
 	task, _ = q.take()
-	assert.Equal(t, 2, task.task.(*mockRunnable).id)
+	assert.Equal(t, 2, task.task.(*fakeRunnable).id)
 
 	waitTake, waitOffer := make(chan struct{}), make(chan struct{})
 	// insert first
@@ -44,29 +44,29 @@ func TestDelayedWorkQueue(t *testing.T) {
 		<-waitOffer
 		close(waitTake)
 		task, _ = q.take()
-		assert.Equal(t, 4, task.task.(*mockRunnable).id)
+		assert.Equal(t, 4, task.task.(*fakeRunnable).id)
 	}()
 
-	q.offer(&mockRunnable{id: 4}, time.Millisecond*5)
+	q.offer(&fakeRunnable{id: 4}, time.Millisecond*5)
 	fmt.Printf("offert %+v\n", q.queue)
 	close(waitOffer)
 	<-waitTake
 
 	task, _ = q.take()
-	assert.Equal(t, 1, task.task.(*mockRunnable).id)
+	assert.Equal(t, 1, task.task.(*fakeRunnable).id)
 	fmt.Printf("take %+v\n", q.queue)
 	task, _ = q.take()
-	assert.Equal(t, 3, task.task.(*mockRunnable).id)
+	assert.Equal(t, 3, task.task.(*fakeRunnable).id)
 
 	go func() {
-		q.offer(&mockRunnable{id: -1}, time.Millisecond*10)
+		q.offer(&fakeRunnable{id: -1}, time.Millisecond*10)
 	}()
 	task, _ = q.take()
-	assert.Equal(t, -1, task.task.(*mockRunnable).id)
+	assert.Equal(t, -1, task.task.(*fakeRunnable).id)
 
 	offer := func(count int) {
 		for i := 0; i < count; i++ {
-			q.offer(&mockRunnable{id: i}, time.Duration(i%7)*time.Millisecond*20)
+			q.offer(&fakeRunnable{id: i}, time.Duration(i%7)*time.Millisecond*20)
 		}
 	}
 
@@ -86,8 +86,8 @@ func TestDelayedWorkQueue(t *testing.T) {
 	for i := 1; i < count; i++ {
 		if !tasks[i-1].time.Before(tasks[i].time) {
 			t.Log(
-				tasks[i-1], "delay ", tasks[i-1].task.(*mockRunnable).id%7,
-				tasks[i], "delay ", tasks[i].task.(*mockRunnable).id%7,
+				tasks[i-1], "delay ", tasks[i-1].task.(*fakeRunnable).id%7,
+				tasks[i], "delay ", tasks[i].task.(*fakeRunnable).id%7,
 			)
 		}
 		assert.True(t, tasks[i-1].time.Before(tasks[i].time))

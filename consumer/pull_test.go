@@ -54,9 +54,9 @@ func testSendback(c *PullConsumer, t *testing.T) {
 func testPullSync(c *PullConsumer, t *testing.T) {
 	q := &message.Queue{}
 	pr, err := c.PullSync(q, "", 0, 10)
-	assert.Equal(t, "mock find broker addr error", err.Error())
+	assert.Equal(t, "fake find broker addr error", err.Error())
 	pr, err = c.PullSync(q, "", 0, 10)
-	assert.Equal(t, "mock pull error", err.Error())
+	assert.Equal(t, "fake pull error", err.Error())
 	pr, err = c.PullSync(q, "", 0, 10)
 	assert.Nil(t, err)
 	id, exist := c.brokerSuggester.get(q)

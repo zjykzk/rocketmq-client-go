@@ -12,13 +12,13 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
-type mockConcurrentlyConsumer struct {
+type fakeConcurrentlyConsumer struct {
 	consumeCount int32
 	wg           sync.WaitGroup
 	ret          ConsumeConcurrentlyStatus
 }
 
-func (m *mockConcurrentlyConsumer) Consume(
+func (m *fakeConcurrentlyConsumer) Consume(
 	msgs []*message.Ext, ctx *ConcurrentlyContext,
 ) ConsumeConcurrentlyStatus {
 	atomic.AddInt32(&m.consumeCount, int32(len(msgs)))
@@ -26,47 +26,47 @@ func (m *mockConcurrentlyConsumer) Consume(
 	return m.ret
 }
 
-type mockSendback struct {
+type fakeSendback struct {
 	runSendback bool
 	sendErr     error
 
 	msgs []*message.Ext
 }
 
-func (ms *mockSendback) SendBack(m *message.Ext, delayLevel int, broker string) error {
+func (ms *fakeSendback) SendBack(m *message.Ext, delayLevel int, broker string) error {
 	ms.runSendback = true
 	ms.msgs = append(ms.msgs, m)
 	return ms.sendErr
 }
 
-type mockOffseter struct {
+type fakeOffseter struct {
 	runUpdate     bool
 	offset        int64
 	readOffsetErr error
 }
 
-func (m *mockOffseter) persist() error {
+func (m *fakeOffseter) persist() error {
 	return nil
 }
 
-func (m *mockOffseter) updateQueues(...*message.Queue) {
+func (m *fakeOffseter) updateQueues(...*message.Queue) {
 	return
 }
 
-func (m *mockOffseter) updateOffsetIfGreater(_ *message.Queue, offset int64) {
+func (m *fakeOffseter) updateOffsetIfGreater(_ *message.Queue, offset int64) {
 	m.offset = offset
 	m.runUpdate = true
 }
 
-func (m *mockOffseter) persistOne(_ *message.Queue) {
+func (m *fakeOffseter) persistOne(_ *message.Queue) {
 }
 
-func (m *mockOffseter) removeOffset(_ *message.Queue) (offset int64, ok bool) {
+func (m *fakeOffseter) removeOffset(_ *message.Queue) (offset int64, ok bool) {
 	offset = m.offset
 	return
 }
 
-func (m *mockOffseter) readOffset(_ *message.Queue, _ int) (offset int64, err error) {
+func (m *fakeOffseter) readOffset(_ *message.Queue, _ int) (offset int64, err error) {
 	err = m.readOffsetErr
 	offset = m.offset
 	return
@@ -76,11 +76,11 @@ func newTestConcurrentlyService(t *testing.T) *consumeConcurrentlyService {
 	cs, err := newConsumeConcurrentlyService(concurrentlyServiceConfig{
 		consumeServiceConfig: consumeServiceConfig{
 			group:           "test concurrent consume service",
-			messageSendBack: &mockSendback{},
-			offseter:        &mockOffseter{},
+			messageSendBack: &fakeSendback{},
+			offseter:        &fakeOffseter{},
 			logger:          log.Std,
 		},
-		consumer:             &mockConcurrentlyConsumer{},
+		consumer:             &fakeConcurrentlyConsumer{},
 		consumeTimeout:       time.Second * 20,
 		concurrentCount:      3,
 		batchSize:            3,
@@ -100,17 +100,17 @@ func TestNewConcurrentlyService(t *testing.T) {
 	_, err = newConsumeConcurrentlyService(concurrentlyServiceConfig{
 		consumeServiceConfig: consumeServiceConfig{
 			group:           "test consume service",
-			messageSendBack: &mockSendback{},
+			messageSendBack: &fakeSendback{},
 			logger:          log.Std,
 		},
 	})
 	assert.NotNil(t, err)
 
-	consumer := &mockConcurrentlyConsumer{}
+	consumer := &fakeConcurrentlyConsumer{}
 	_, err = newConsumeConcurrentlyService(concurrentlyServiceConfig{
 		consumeServiceConfig: consumeServiceConfig{
 			group:           "test consume service",
-			messageSendBack: &mockSendback{},
+			messageSendBack: &fakeSendback{},
 			logger:          log.Std,
 		},
 		consumer: consumer,
@@ -139,8 +139,8 @@ func TestStartShutdown(t *testing.T) {
 	msgs = append(msgs, m)
 	pq.putMessages(msgs)
 
-	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
-	mockConsumer.wg.Add(1)
+	fakeConsumer := cs.consumer.(*fakeConcurrentlyConsumer)
+	fakeConsumer.wg.Add(1)
 	// to be consumed message
 	cs.submitConsumeRequest([]*message.Ext{{QueueOffset: 20}}, pq, &message.Queue{QueueID: 1})
 
@@ -148,8 +148,8 @@ func TestStartShutdown(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	defer cs.shutdown()
 
-	assert.Equal(t, 1, len(cs.messageSendBack.(*mockSendback).msgs))
-	assert.Equal(t, int32(1), mockConsumer.consumeCount)
+	assert.Equal(t, 1, len(cs.messageSendBack.(*fakeSendback).msgs))
+	assert.Equal(t, int32(1), fakeConsumer.consumeCount)
 }
 
 func TestSubmitRequestSuccess(t *testing.T) {
@@ -159,22 +159,22 @@ func TestSubmitRequestSuccess(t *testing.T) {
 	defer cs.shutdown()
 
 	count := 2000
-	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
-	mockConsumer.wg.Add(count)
+	fakeConsumer := cs.consumer.(*fakeConcurrentlyConsumer)
+	fakeConsumer.wg.Add(count)
 
 	msgs := []*message.Ext{&message.Ext{}}
 	for i := 0; i < count; i++ {
 		go func() { cs.submitConsumeRequest(msgs, newProcessQueue(), nil) }()
 	}
 
-	mockConsumer.wg.Wait()
-	assert.Equal(t, int32(count), mockConsumer.consumeCount)
+	fakeConsumer.wg.Wait()
+	assert.Equal(t, int32(count), fakeConsumer.consumeCount)
 }
 
 func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 	t.Run("broadcasting", func(t *testing.T) {
 		cs := newTestConcurrentlyService(t)
-		offsetUpdater := cs.offseter.(*mockOffseter)
+		offsetUpdater := cs.offseter.(*fakeOffseter)
 		cs.messageModel = BroadCasting
 
 		msgs := []*message.Ext{&message.Ext{}}
@@ -210,8 +210,8 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 
 	t.Run("clustering", func(t *testing.T) {
 		cs := newTestConcurrentlyService(t)
-		offsetUpdater := cs.offseter.(*mockOffseter)
-		sendbacker := cs.messageSendBack.(*mockSendback)
+		offsetUpdater := cs.offseter.(*fakeOffseter)
+		sendbacker := cs.messageSendBack.(*fakeSendback)
 		cs.messageModel = Clustering
 		mq := &message.Queue{}
 
@@ -278,8 +278,8 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 
 func TestConsumeConcurrentlyProcessResultSuc(t *testing.T) {
 	cs := newTestConcurrentlyService(t)
-	offsetUpdater := cs.offseter.(*mockOffseter)
-	sendbacker := cs.messageSendBack.(*mockSendback)
+	offsetUpdater := cs.offseter.(*fakeOffseter)
+	sendbacker := cs.messageSendBack.(*fakeSendback)
 	t.Run("broadcasting", func(t *testing.T) {
 		cs.messageModel = BroadCasting
 
@@ -368,7 +368,7 @@ func TestConcurrentlyProcessqueue(t *testing.T) {
 
 	cs.clearExpiredMessage()
 
-	sendbacker := cs.messageSendBack.(*mockSendback)
+	sendbacker := cs.messageSendBack.(*fakeSendback)
 	expiredMsgs := sendbacker.msgs
 	assert.Equal(t, 10, len(expiredMsgs))
 	assert.Equal(t, msgs[:10], expiredMsgs)
@@ -396,8 +396,8 @@ func TestConcurrentSubmitLater(t *testing.T) {
 	cs.start()
 
 	count := 2000
-	mockConsumer := cs.consumer.(*mockConcurrentlyConsumer)
-	mockConsumer.wg.Add(count)
+	fakeConsumer := cs.consumer.(*fakeConcurrentlyConsumer)
+	fakeConsumer.wg.Add(count)
 
 	msgs := []*message.Ext{&message.Ext{}}
 	for i := 0; i < count; i++ {
@@ -410,8 +410,8 @@ func TestConcurrentSubmitLater(t *testing.T) {
 		}()
 	}
 
-	mockConsumer.wg.Wait()
-	assert.Equal(t, int32(count), mockConsumer.consumeCount)
+	fakeConsumer.wg.Wait()
+	assert.Equal(t, int32(count), fakeConsumer.consumeCount)
 
 	cs.shutdown()
 }

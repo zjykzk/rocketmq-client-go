@@ -8,36 +8,36 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
-type mockProducer struct {
+type fakeProducer struct {
 	group string
 }
 
-func (mp *mockProducer) Group() string {
+func (mp *fakeProducer) Group() string {
 	return mp.group
 }
 
-func (mp *mockProducer) PublishTopics() []string {
+func (mp *fakeProducer) PublishTopics() []string {
 	return nil
 }
 
-func (mp *mockProducer) UpdateTopicPublish(topic string, router *route.TopicRouter) {}
+func (mp *fakeProducer) UpdateTopicPublish(topic string, router *route.TopicRouter) {}
 
-func (mp *mockProducer) NeedUpdateTopicPublish(topic string) bool {
+func (mp *fakeProducer) NeedUpdateTopicPublish(topic string) bool {
 	return false
 }
 
 func TestProducerColl(t *testing.T) {
 	group := "g1"
 	pc := producerColl{eles: make(map[string]Producer)}
-	prev, suc := pc.putIfAbsent(group, &mockProducer{group})
+	prev, suc := pc.putIfAbsent(group, &fakeProducer{group})
 	assert.Nil(t, prev)
 	assert.True(t, suc)
 
-	prev, suc = pc.putIfAbsent(group, &mockProducer{group})
+	prev, suc = pc.putIfAbsent(group, &fakeProducer{group})
 	assert.NotNil(t, prev)
 	assert.False(t, suc)
 
-	assert.Equal(t, []Producer{&mockProducer{group}}, pc.coll())
+	assert.Equal(t, []Producer{&fakeProducer{group}}, pc.coll())
 	assert.True(t, pc.contains(group))
 	assert.Equal(t, 1, pc.size())
 
@@ -46,45 +46,45 @@ func TestProducerColl(t *testing.T) {
 	assert.Equal(t, 0, pc.size())
 }
 
-type mockConsumer struct {
+type fakeConsumer struct {
 	group string
 }
 
-func (mc *mockConsumer) Group() string {
+func (mc *fakeConsumer) Group() string {
 	return mc.group
 }
-func (mc *mockConsumer) SubscribeTopics() []string {
+func (mc *fakeConsumer) SubscribeTopics() []string {
 	return nil
 }
-func (mc *mockConsumer) UpdateTopicSubscribe(topic string, router *route.TopicRouter) {
+func (mc *fakeConsumer) UpdateTopicSubscribe(topic string, router *route.TopicRouter) {
 	return
 }
-func (mc *mockConsumer) NeedUpdateTopicSubscribe(topic string) bool {
+func (mc *fakeConsumer) NeedUpdateTopicSubscribe(topic string) bool {
 	return false
 }
-func (mc *mockConsumer) ConsumeFromWhere() string {
+func (mc *fakeConsumer) ConsumeFromWhere() string {
 	return ""
 }
-func (mc *mockConsumer) Model() string {
+func (mc *fakeConsumer) Model() string {
 	return ""
 }
-func (mc *mockConsumer) Type() string {
+func (mc *fakeConsumer) Type() string {
 	return ""
 }
-func (mc *mockConsumer) UnitMode() bool {
+func (mc *fakeConsumer) UnitMode() bool {
 	return false
 }
-func (mc *mockConsumer) Subscriptions() []*SubscribeData {
+func (mc *fakeConsumer) Subscriptions() []*SubscribeData {
 	return nil
 }
-func (mc *mockConsumer) ReblanceQueue() {}
-func (mc *mockConsumer) RunningInfo() RunningInfo {
+func (mc *fakeConsumer) ReblanceQueue() {}
+func (mc *fakeConsumer) RunningInfo() RunningInfo {
 	return RunningInfo{}
 }
 
 func TestConsumer(t *testing.T) {
 	group := "g1"
-	mc := &mockConsumer{group: group}
+	mc := &fakeConsumer{group: group}
 	cc := consumerColl{eles: make(map[string]Consumer)}
 	prev, suc := cc.putIfAbsent(group, mc)
 	assert.Nil(t, prev)
@@ -103,17 +103,17 @@ func TestConsumer(t *testing.T) {
 	assert.Equal(t, 0, cc.size())
 }
 
-type mockAdmin struct {
+type fakeAdmin struct {
 	group string
 }
 
-func (a *mockAdmin) Group() string {
+func (a *fakeAdmin) Group() string {
 	return a.group
 }
 
 func TestAdmin(t *testing.T) {
 	group := "g1"
-	ma := &mockAdmin{group: group}
+	ma := &fakeAdmin{group: group}
 	ac := adminColl{eles: make(map[string]Admin)}
 	prev, suc := ac.putIfAbsent(group, ma)
 	assert.Nil(t, prev)

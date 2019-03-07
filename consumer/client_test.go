@@ -40,13 +40,13 @@ func (c *fakeMQClient) FindBrokerAddr(brokerName string, hintBrokerID int32, loc
 			IsSlave: true,
 		}, nil
 	}
-	return nil, errors.New("mock find broker addr error")
+	return nil, errors.New("fake find broker addr error")
 }
 
 func (c *fakeMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
 	switch c.updateTopicRouterCount++; c.updateTopicRouterCount {
 	case 1:
-		return errors.New("mock update topic router info")
+		return errors.New("fake update topic router info")
 	default:
 		c.brokderAddr = "ok"
 	}
@@ -75,7 +75,7 @@ func (c *fakeMQClient) PullMessageSync(
 	}
 	switch c.pullCount++; c.pullCount {
 	case 1:
-		return nil, errors.New("mock pull error")
+		return nil, errors.New("fake pull error")
 	case 2:
 		pr.Code = rpc.Success
 	case 3:

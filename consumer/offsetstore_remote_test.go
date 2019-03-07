@@ -9,7 +9,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
-type mockOffsetRemoteOper struct {
+type fakeOffsetRemoteOper struct {
 	runUpdate bool
 	updateErr error
 	updateRet int64
@@ -18,54 +18,54 @@ type mockOffsetRemoteOper struct {
 	fetchRet int64
 }
 
-func (m *mockOffsetRemoteOper) update(q *message.Queue, offset int64) error {
+func (m *fakeOffsetRemoteOper) update(q *message.Queue, offset int64) error {
 	m.runUpdate = true
 	return m.updateErr
 }
 
-func (m *mockOffsetRemoteOper) fetch(q *message.Queue) (int64, error) {
+func (m *fakeOffsetRemoteOper) fetch(q *message.Queue) (int64, error) {
 	return m.fetchRet, m.fetchErr
 }
 
 func TestRemoteStore(t *testing.T) {
-	mockRemoteOper := &mockOffsetRemoteOper{}
+	fakeRemoteOper := &fakeOffsetRemoteOper{}
 	// new
 	rs, err := newRemoteStore(remoteStoreConfig{})
 	assert.NotNil(t, err)
 	rs, err = newRemoteStore(remoteStoreConfig{
-		offsetOper: mockRemoteOper,
+		offsetOper: fakeRemoteOper,
 	})
 	assert.NotNil(t, err)
 	rs, err = newRemoteStore(remoteStoreConfig{
-		offsetOper: mockRemoteOper,
+		offsetOper: fakeRemoteOper,
 		logger:     log.Std,
 	})
 	assert.Nil(t, err)
 
 	q := &message.Queue{}
 	// read from store
-	mockRemoteOper.fetchRet = 10
+	fakeRemoteOper.fetchRet = 10
 	of, err := rs.readOffsetFromStore(q)
 	assert.Equal(t, int64(10), of)
-	assert.Equal(t, mockRemoteOper.fetchErr, err)
+	assert.Equal(t, fakeRemoteOper.fetchErr, err)
 
 	rs.updateOffset(q, 0)
 
 	// persistOne
 	rs.persistOne(&message.Queue{QueueID: 2})
-	assert.False(t, mockRemoteOper.runUpdate)
+	assert.False(t, fakeRemoteOper.runUpdate)
 	rs.persistOne(q)
-	assert.True(t, mockRemoteOper.runUpdate)
-	mockRemoteOper.updateErr = errors.New("bad update")
+	assert.True(t, fakeRemoteOper.runUpdate)
+	fakeRemoteOper.updateErr = errors.New("bad update")
 	rs.persistOne(q)
-	assert.True(t, mockRemoteOper.runUpdate)
+	assert.True(t, fakeRemoteOper.runUpdate)
 
 	q1 := &message.Queue{BrokerName: "b1", QueueID: 1}
 	// persist and clear
 	rs.updateOffset(q1, 1)
-	mockRemoteOper.runUpdate = false
+	fakeRemoteOper.runUpdate = false
 	rs.updateQueues(q1)
-	assert.True(t, mockRemoteOper.runUpdate)
+	assert.True(t, fakeRemoteOper.runUpdate)
 
 	_, ok := rs.readOffsetFromMemory(q)
 	assert.False(t, ok)

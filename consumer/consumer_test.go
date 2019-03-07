@@ -101,7 +101,7 @@ func TestStart(t *testing.T) {
 	}
 	c.StartFunc, c.ShutdownFunc = c.start, c.shutdown
 
-	c.NameServerAddrs = []string{"mock addr"}
+	c.NameServerAddrs = []string{"fake addr"}
 	c.GroupName = "test"
 	assert.Nil(t, c.Start())
 	assert.NotNil(t, c.Start())
