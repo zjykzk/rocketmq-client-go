@@ -45,7 +45,7 @@ func (f *fakeMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
 }
 
 func TestSendHeader(t *testing.T) {
-	p := NewProducer("sendHeader", []string{"abc"}, log.Std)
+	p := New("sendHeader", []string{"abc"}, log.Std)
 	p.CreateTopicKey, p.DefaultTopicQueueNums = "CreateTopicKey", 100
 	m := &messageWrap{Message: &message.Message{Topic: "sendHeader", Flag: 111, Properties: map[string]string{
 		message.PropertyReconsumeTime:     "100",
@@ -79,7 +79,7 @@ func TestSendHeader(t *testing.T) {
 }
 
 func TestSendSync0(t *testing.T) {
-	p := NewProducer("sendHeader", []string{"abc"}, log.Std)
+	p := New("sendHeader", []string{"abc"}, log.Std)
 	mqClient := &fakeMQClient{}
 	p.mqclient = mqClient
 
@@ -110,7 +110,7 @@ func TestSendSync0(t *testing.T) {
 }
 
 func TestSendSync(t *testing.T) {
-	p := NewProducer("sendSync", []string{"abc"}, log.Std)
+	p := New("sendSync", []string{"abc"}, log.Std)
 	p.mqclient = &fakeMQClient{}
 	p.mqFaultStrategy = NewMQFaultStrategy(true)
 
@@ -152,7 +152,7 @@ func TestSendSync(t *testing.T) {
 }
 
 func TestUpdateTopicRouter(t *testing.T) {
-	p := NewProducer("TestUpdateTopicRouter", []string{"abc"}, log.Std)
+	p := New("TestUpdateTopicRouter", []string{"abc"}, log.Std)
 	topic := "TestUpdateTopicRouter"
 	p.topicPublishInfos.table = make(map[string]*topicPublishInfo)
 	p.UpdateTopicPublish(topic, &route.TopicRouter{
@@ -205,7 +205,7 @@ func TestUpdateTopicRouter(t *testing.T) {
 
 func TestSendMessageWithLatency(t *testing.T) {
 	topic, mqClient := "TestSendMessageWithLatency", &fakeMQClient{}
-	p := NewProducer("TestSendMessageWithLatency", []string{"g"}, log.Std)
+	p := New("TestSendMessageWithLatency", []string{"g"}, log.Std)
 	p.mqclient = mqClient
 	p.mqFaultStrategy = NewMQFaultStrategy(true)
 
@@ -225,7 +225,7 @@ func TestSendMessageWithLatency(t *testing.T) {
 }
 
 func TestCompress(t *testing.T) {
-	p := NewProducer("TestCompress", []string{"g"}, log.Std)
+	p := New("TestCompress", []string{"g"}, log.Std)
 
 	// under threshold
 	ok, err := p.tryToCompress(&message.Message{})
@@ -246,7 +246,7 @@ func TestCompress(t *testing.T) {
 }
 
 func TestSendBatch(t *testing.T) {
-	p := NewProducer("TestSendBatch", []string{"g"}, log.Std)
+	p := New("TestSendBatch", []string{"g"}, log.Std)
 	// bad topic
 	p.SendBatchSync(&message.Batch{})
 }

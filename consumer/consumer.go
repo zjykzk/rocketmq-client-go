@@ -162,7 +162,7 @@ func (c *consumer) checkConfig() error {
 
 func (c *consumer) buildMQClient() (err error) {
 	c.ClientID = client.BuildMQClientID(c.ClientIP, c.UnitName, c.InstanceName)
-	c.client, err = client.NewMQClient(
+	c.client, err = client.New(
 		&client.Config{
 			HeartbeatBrokerInterval: c.HeartbeatBrokerInterval,
 			PollNameServerInterval:  c.PollNameServerInterval,

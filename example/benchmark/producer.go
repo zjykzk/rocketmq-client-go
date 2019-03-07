@@ -225,7 +225,7 @@ func (bp *bproducer) run(args []string) {
 		fmt.Printf("open log file error:%s\n", err)
 		return
 	}
-	p := producer.NewProducer(
+	p := producer.New(
 		bp.groupID, strings.Split(bp.nameSrv, ","), log.New(logFile, "", log.Ldefault),
 	)
 

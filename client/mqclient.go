@@ -94,8 +94,8 @@ func newMQClient(config *Config, clientID string, logger log.Logger) *MQClient {
 	return c
 }
 
-// NewMQClient create the client
-func NewMQClient(config *Config, clientID string, logger log.Logger) (*MQClient, error) {
+// New create the client
+func New(config *Config, clientID string, logger log.Logger) (*MQClient, error) {
 	if clientID == "" {
 		return nil, errEmptyClientID
 	}
@@ -104,8 +104,16 @@ func NewMQClient(config *Config, clientID string, logger log.Logger) (*MQClient,
 		return nil, errEmptyNameSrvAddress
 	}
 
-	mqClients.Lock()
+	mqClients.RLock()
 	c, ok := mqClients.eles[clientID]
+	mqClients.RUnlock()
+
+	if ok {
+		return c, nil
+	}
+
+	mqClients.Lock()
+	c, ok = mqClients.eles[clientID]
 	if !ok {
 		c = newMQClient(config, clientID, logger)
 		mqClients.eles[clientID] = c

@@ -61,8 +61,8 @@ type Producer struct {
 	Logger log.Logger
 }
 
-// NewProducer creates one procuder instance
-func NewProducer(group string, namesrvAddrs []string, logger log.Logger) *Producer {
+// New creates procuder
+func New(group string, namesrvAddrs []string, logger log.Logger) *Producer {
 	p := &Producer{
 		Config: defaultConfig,
 		Logger: logger,
@@ -90,7 +90,7 @@ func (p *Producer) start() (err error) {
 	p.topicPublishInfos.table = make(map[string]*topicPublishInfo)
 
 	p.ClientID = client.BuildMQClientID(p.ClientIP, p.UnitName, p.InstanceName)
-	client, err := client.NewMQClient(
+	client, err := client.New(
 		&client.Config{
 			HeartbeatBrokerInterval: p.HeartbeatBrokerInterval,
 			PollNameServerInterval:  p.PollNameServerInterval,

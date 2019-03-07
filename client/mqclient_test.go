@@ -18,19 +18,19 @@ func TestUnion(t *testing.T) {
 }
 
 func TestMQClient(t *testing.T) {
-	_, err := NewMQClient(&Config{}, "", nil)
+	_, err := New(&Config{}, "", nil)
 	assert.NotNil(t, err)
-	_, err = NewMQClient(&Config{}, "clientid", nil)
+	_, err = New(&Config{}, "clientid", nil)
 	assert.NotNil(t, err)
 
 	logger := log.Std
-	client, err := NewMQClient(&Config{NameServerAddrs: []string{"addr"}}, "clientid", logger)
+	client, err := New(&Config{NameServerAddrs: []string{"addr"}}, "clientid", logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 1, len(mqClients.eles))
 
-	client1, err := NewMQClient(&Config{NameServerAddrs: []string{"addr"}}, "clientid", logger)
+	client1, err := New(&Config{NameServerAddrs: []string{"addr"}}, "clientid", logger)
 	assert.Equal(t, client, client1)
 
 	client.Start()

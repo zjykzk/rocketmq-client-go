@@ -65,7 +65,7 @@ func (s *sendBatch) Run(args []string) {
 	}
 
 	logger := log.Std
-	p := producer.NewProducer(s.Name(), strings.Split(s.namesrvAddrs, ","), logger)
+	p := producer.New(s.Name(), strings.Split(s.namesrvAddrs, ","), logger)
 	p.Start()
 
 	bodys := strings.Split(s.bodys, ",")

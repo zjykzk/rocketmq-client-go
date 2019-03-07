@@ -65,7 +65,7 @@ func (s *sendMsg) Run(args []string) {
 	}
 
 	logger := log.Std
-	p := producer.NewProducer("test-group", strings.Split(s.namesrvAddrs, ","), logger)
+	p := producer.New("test-group", strings.Split(s.namesrvAddrs, ","), logger)
 	p.Start()
 
 	msg := &message.Message{Topic: s.topic, Body: []byte(s.body)}

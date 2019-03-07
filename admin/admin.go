@@ -68,7 +68,7 @@ func (a *Admin) Start() (err error) {
 		return
 	}
 	a.ClientID = client.BuildMQClientID(a.ClientIP, a.UnitName, a.InstanceName)
-	a.client, err = client.NewMQClient(
+	a.client, err = client.New(
 		&client.Config{
 			HeartbeatBrokerInterval: a.HeartbeatBrokerInterval,
 			PollNameServerInterval:  a.PollNameServerInterval,
