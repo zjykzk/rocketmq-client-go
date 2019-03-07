@@ -76,9 +76,14 @@ func (c *PullConsumer) checkConfig() error {
 	return nil
 }
 
+// Subscribe subscribe the topic dynamic
+func (c *PullConsumer) Subscribe(topic string) {
+	c.consumer.Subscribe(topic, subAll)
+}
+
 func (c *PullConsumer) subscribe() {
 	for _, t := range c.registerTopics {
-		c.consumer.Subscribe(t, subAll)
+		c.Subscribe(t)
 	}
 }
 
@@ -266,6 +271,7 @@ func dToMsStr(d time.Duration) string {
 }
 
 // Register register the message queue changed event of the topics
+// it must be called before calling Start function, otherwise the topic is not subscribe
 func (c *PullConsumer) Register(topics []string, listener MessageQueueChanger) {
 	c.registerTopics = topics
 	c.messageQueueChanger = listener
