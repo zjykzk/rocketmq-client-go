@@ -31,18 +31,32 @@ type fakeSendback struct {
 	sendErr     error
 
 	msgs []*message.Ext
+
+	sync.Mutex
 }
 
 func (ms *fakeSendback) SendBack(m *message.Ext, delayLevel int, broker string) error {
+	ms.Lock()
 	ms.runSendback = true
 	ms.msgs = append(ms.msgs, m)
+	ms.Unlock()
+
 	return ms.sendErr
+}
+
+func (ms *fakeSendback) messageCount() int {
+	ms.Lock()
+	r := len(ms.msgs)
+	ms.Unlock()
+	return r
 }
 
 type fakeOffseter struct {
 	runUpdate     bool
 	offset        int64
 	readOffsetErr error
+
+	sync.Mutex
 }
 
 func (m *fakeOffseter) persist() error {
@@ -54,8 +68,10 @@ func (m *fakeOffseter) updateQueues(...*message.Queue) {
 }
 
 func (m *fakeOffseter) updateOffsetIfGreater(_ *message.Queue, offset int64) {
+	m.Lock()
 	m.offset = offset
 	m.runUpdate = true
+	m.Unlock()
 }
 
 func (m *fakeOffseter) persistOne(_ *message.Queue) {
@@ -148,8 +164,8 @@ func TestStartShutdown(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	defer cs.shutdown()
 
-	assert.Equal(t, 1, len(cs.messageSendBack.(*fakeSendback).msgs))
-	assert.Equal(t, int32(1), fakeConsumer.consumeCount)
+	assert.Equal(t, 1, cs.messageSendBack.(*fakeSendback).messageCount())
+	assert.Equal(t, int32(1), atomic.LoadInt32(&fakeConsumer.consumeCount))
 }
 
 func TestSubmitRequestSuccess(t *testing.T) {

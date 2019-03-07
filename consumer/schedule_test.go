@@ -48,49 +48,45 @@ func TestDelayedWorkQueue(t *testing.T) {
 	}()
 
 	q.offer(&fakeRunnable{id: 4}, time.Millisecond*5)
-	fmt.Printf("offert %+v\n", q.queue)
+	fmt.Printf("offert %+v\n", q.tasks())
 	close(waitOffer)
 	<-waitTake
 
-	task, _ = q.take()
-	assert.Equal(t, 1, task.task.(*fakeRunnable).id)
-	fmt.Printf("take %+v\n", q.queue)
-	task, _ = q.take()
-	assert.Equal(t, 3, task.task.(*fakeRunnable).id)
+	task1, _ := q.take()
+	assert.Equal(t, 1, task1.task.(*fakeRunnable).id)
+	fmt.Printf("take %+v\n", q.tasks())
+	task3, _ := q.take()
+	assert.Equal(t, 3, task3.task.(*fakeRunnable).id)
 
 	go func() {
 		q.offer(&fakeRunnable{id: -1}, time.Millisecond*10)
 	}()
-	task, _ = q.take()
-	assert.Equal(t, -1, task.task.(*fakeRunnable).id)
+	task2, _ := q.take()
+	assert.Equal(t, -1, task2.task.(*fakeRunnable).id)
 
+	// order
 	offer := func(count int) {
 		for i := 0; i < count; i++ {
-			q.offer(&fakeRunnable{id: i}, time.Duration(i%7)*time.Millisecond*20)
+			q.offer(&fakeRunnable{id: i}, time.Millisecond)
 		}
 	}
 
-	tasks := make([]*scheduledTask, 0, 1024)
-	taker := func(count int) {
+	take := func(count int) []*scheduledTask {
+		tasks := make([]*scheduledTask, 0, count)
 		for i := 0; i < count; i++ {
 			task, c := q.take()
 			assert.False(t, c)
 			tasks = append(tasks, task)
 		}
+		return tasks
 	}
 
 	count := 10000
 	go offer(count)
 
-	taker(count)
+	tasks := take(count)
 	for i := 1; i < count; i++ {
-		if !tasks[i-1].time.Before(tasks[i].time) {
-			t.Log(
-				tasks[i-1], "delay ", tasks[i-1].task.(*fakeRunnable).id%7,
-				tasks[i], "delay ", tasks[i].task.(*fakeRunnable).id%7,
-			)
-		}
-		assert.True(t, tasks[i-1].time.Before(tasks[i].time))
+		assert.True(t, tasks[i-1].time.Before(tasks[i].time), "%s, %s", tasks[i-1].time, tasks[i].time)
 	}
 }
 

@@ -171,6 +171,15 @@ func (q *delayedWorkQueue) takeReadysAndNextDelay() ([]*scheduledTask, time.Dura
 	return tasks, delay
 }
 
+func (q *delayedWorkQueue) tasks() []*scheduledTask {
+	q.lock.Lock()
+	r := make([]*scheduledTask, len(q.queue))
+	copy(r, q.queue)
+	q.lock.Unlock()
+
+	return r
+}
+
 func (q *delayedWorkQueue) shutdown() {
 	close(q.exitChan)
 	q.wg.Wait()
