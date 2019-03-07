@@ -65,7 +65,7 @@ func TestDataTable(t *testing.T) {
 }
 
 func TestQueueTable(t *testing.T) {
-	qt := NewQueueTable()
+	qt := NewSubscribeQueueTable()
 	topic := "topic"
 
 	prev := qt.Put(topic, []*message.Queue{&message.Queue{Topic: topic}})

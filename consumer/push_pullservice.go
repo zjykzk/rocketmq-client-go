@@ -2,7 +2,9 @@ package consumer
 
 import (
 	"errors"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
@@ -20,6 +22,10 @@ type pullRequest struct {
 	isLockedFirst bool
 }
 
+func (r *pullRequest) String() string {
+	return fmt.Sprintf("group:%s,message queue:%s,nextoffset:%d", r.group, r.messageQueue, r.nextOffset)
+}
+
 type messagePuller interface {
 	pull(r *pullRequest)
 }
@@ -33,6 +39,7 @@ type pullServiceConfig struct {
 type pullService struct {
 	pullServiceConfig
 	queuesOfMessageQueue sync.Map
+	sched                *scheduler
 
 	logger log.Logger
 
@@ -54,8 +61,13 @@ func newPullService(conf pullServiceConfig) (*pullService, error) {
 
 	return &pullService{
 		pullServiceConfig: conf,
+		sched:             newScheduler(1),
 		exitChan:          make(chan struct{}),
 	}, nil
+}
+
+func (ps *pullService) submitRequestLater(r *pullRequest, delay time.Duration) {
+	ps.sched.scheduleFuncAfter(func() { ps.submitRequestImmediately(r) }, delay)
 }
 
 func (ps *pullService) submitRequestImmediately(r *pullRequest) {

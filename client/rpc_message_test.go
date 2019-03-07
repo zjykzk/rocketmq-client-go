@@ -11,7 +11,7 @@ import (
 )
 
 type fakeRemoteClient struct {
-	remote.MockClient
+	remote.FakeClient
 
 	requestSyncErr error
 	command        remote.Command
@@ -22,7 +22,11 @@ func (f *fakeRemoteClient) RequestSync(string, *remote.Command, time.Duration) (
 }
 
 func fakeClient() *MQClient {
-	c := newMQClient(&Config{}, "", log.Std)
+	c, err := newMQClient(&Config{}, "", log.Std)
+	if err != nil {
+		panic(err)
+	}
+
 	c.Client = &fakeRemoteClient{}
 	return c
 }

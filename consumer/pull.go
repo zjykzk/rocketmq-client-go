@@ -140,7 +140,7 @@ func (c *PullConsumer) PullSyncBlockIfNotFound(
 ) (
 	*PullResult, error,
 ) {
-	if err := c.CheckRuning(); err != nil {
+	if err := c.CheckRunning(); err != nil {
 		return nil, err
 	}
 	return c.pullSync(q, expr, offset, maxCount, true)
@@ -150,7 +150,7 @@ func (c *PullConsumer) PullSyncBlockIfNotFound(
 func (c *PullConsumer) PullSync(q *message.Queue, expr string, offset int64, maxCount int) (
 	*PullResult, error,
 ) {
-	if err := c.CheckRuning(); err != nil {
+	if err := c.CheckRunning(); err != nil {
 		return nil, err
 	}
 	return c.pullSync(q, expr, offset, maxCount, false)

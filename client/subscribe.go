@@ -13,8 +13,8 @@ type SubscribeQueueTable struct {
 	table  map[string][]*message.Queue // key: topic
 }
 
-// NewQueueTable creates the QueueTable
-func NewQueueTable() *SubscribeQueueTable {
+// NewSubscribeQueueTable creates the QueueTable
+func NewSubscribeQueueTable() *SubscribeQueueTable {
 	return &SubscribeQueueTable{
 		table: make(map[string][]*message.Queue, 128),
 	}

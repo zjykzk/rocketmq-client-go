@@ -66,8 +66,8 @@ var mqClients = mqClientColl{
 var errEmptyClientID = errors.New("empty client id")
 var errEmptyNameSrvAddress = errors.New("empty name server address")
 
-func newMQClient(config *Config, clientID string, logger log.Logger) *MQClient {
-	c := &MQClient{
+func newMQClient(config *Config, clientID string, logger log.Logger) (c *MQClient, err error) {
+	c = &MQClient{
 		clientID:       clientID,
 		exitChan:       make(chan struct{}),
 		consumers:      consumerColl{eles: make(map[string]Consumer)},
@@ -86,16 +86,16 @@ func newMQClient(config *Config, clientID string, logger log.Logger) *MQClient {
 	if c.PollNameServerInterval <= 0 {
 		c.PollNameServerInterval = 1000 * 30
 	}
-	c.Client = remote.NewClient(remote.ClientConfig{
+	c.Client, err = remote.NewClient(remote.ClientConfig{
 		ReadTimeout:  config.HeartbeatBrokerInterval * 2,
 		WriteTimeout: time.Millisecond * 100,
 		DialTimeout:  time.Second,
 	}, c.processRequest, logger)
-	return c
+	return
 }
 
 // New create the client
-func New(config *Config, clientID string, logger log.Logger) (*MQClient, error) {
+func New(config *Config, clientID string, logger log.Logger) (c *MQClient, err error) {
 	if clientID == "" {
 		return nil, errEmptyClientID
 	}
@@ -115,11 +115,11 @@ func New(config *Config, clientID string, logger log.Logger) (*MQClient, error) 
 	mqClients.Lock()
 	c, ok = mqClients.eles[clientID]
 	if !ok {
-		c = newMQClient(config, clientID, logger)
+		c, err = newMQClient(config, clientID, logger)
 		mqClients.eles[clientID] = c
 	}
 	mqClients.Unlock()
-	return c, nil
+	return
 }
 
 // RegisterConsumer registers consumer

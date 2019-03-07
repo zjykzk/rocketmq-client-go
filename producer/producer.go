@@ -193,7 +193,7 @@ func (p *Producer) NeedUpdateTopicPublish(topic string) bool {
 // SendSync sends the message
 // the message must not be nil
 func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err error) {
-	err = p.CheckRuning()
+	err = p.CheckRunning()
 	if err != nil {
 		return
 	}

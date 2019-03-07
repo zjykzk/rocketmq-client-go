@@ -49,6 +49,7 @@ type consumeConcurrentlyService struct {
 	concurrentCount int
 	consumeQueue    chan *consumeConcurrentlyRequest
 	batchSize       int
+	maxSpan         int
 
 	consumeLaterInterval time.Duration
 }
@@ -60,6 +61,7 @@ type concurrentlyServiceConfig struct {
 	consumeTimeout       time.Duration
 	concurrentCount      int
 	batchSize            int
+	maxSpan              int
 	cleanExpiredInterval time.Duration
 }
 
@@ -90,6 +92,10 @@ func newConsumeConcurrentlyService(conf concurrentlyServiceConfig) (
 		conf.batchSize = 1
 	}
 
+	if conf.maxSpan <= 0 {
+		conf.maxSpan = 2000
+	}
+
 	c, err := newConsumeService(conf.consumeServiceConfig)
 	if err != nil {
 		return nil, err
@@ -102,6 +108,7 @@ func newConsumeConcurrentlyService(conf concurrentlyServiceConfig) (
 		consumeQueue:         make(chan *consumeConcurrentlyRequest, conf.concurrentCount*3/2),
 		consumeTimeout:       conf.consumeTimeout,
 		batchSize:            conf.batchSize,
+		maxSpan:              conf.maxSpan,
 		cleanExpiredInterval: conf.cleanExpiredInterval,
 		consumeLaterInterval: time.Second,
 	}
@@ -321,6 +328,15 @@ func (cs *consumeConcurrentlyService) insertNewMessageQueue(mq *message.Queue) (
 	}
 	cs.offseter.removeOffset(mq)
 	return &cpq.processQueue, true
+}
+
+func (cs *consumeConcurrentlyService) flowControl(q *processQueue) bool {
+	min, max := q.offsetRange()
+	return int(max-min) > cs.maxSpan
+}
+
+func (cs *consumeConcurrentlyService) check(*processQueue) error {
+	return nil
 }
 
 type concurrentProcessQueue struct {

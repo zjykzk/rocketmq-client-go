@@ -23,6 +23,9 @@ type fakeConsumerService struct {
 	pt        *processQueue
 
 	removeRet bool
+
+	flowControllRet bool
+	checkRet        error
 }
 
 func (m *fakeConsumerService) messageQueues() []message.Queue {
@@ -46,11 +49,41 @@ func (m *fakeConsumerService) insertNewMessageQueue(mq *message.Queue) (*process
 	return m.pt, m.insertRet
 }
 
+func (m *fakeConsumerService) flowControl(*processQueue) bool {
+	return m.flowControllRet
+}
+
+func (m *fakeConsumerService) check(*processQueue) error {
+	return m.checkRet
+}
+
+type fakePullRequestDispatcher struct {
+	runSubmitImmediately bool
+	runSubmitLater       bool
+	runShutdown          bool
+	delay                time.Duration
+}
+
+func (d *fakePullRequestDispatcher) submitRequestImmediately(r *pullRequest) {
+	d.runSubmitImmediately = true
+}
+
+func (d *fakePullRequestDispatcher) submitRequestLater(r *pullRequest, delay time.Duration) {
+	d.runSubmitLater = true
+	d.delay = delay
+}
+
+func (d *fakePullRequestDispatcher) shutdown() {
+	d.runShutdown = true
+}
+
 func newTestConcurrentConsumer() *PushConsumer {
 	pc, err := NewConcurrentConsumer(
 		"test push consumer", []string{"dummy"}, &fakeConcurrentlyConsumer{}, log.Std,
 	)
 	pc.client = &fakeMQClient{}
+	pc.pullService = &fakePullRequestDispatcher{}
+	pc.subscribeData = client.NewSubcribeTable()
 	if err != nil {
 		panic(err)
 	}
@@ -78,7 +111,7 @@ func TestNewPushConsumer(t *testing.T) {
 func TestUpdateProcessTable(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	offseter, consumerService := &fakeOffseter{}, &fakeConsumerService{}
-	pc.offseter, pc.consumerService = offseter, consumerService
+	pc.offseter, pc.consumeService = offseter, consumerService
 
 	mmp := &fakeMessagePuller{}
 	pc.pullService, _ = newPullService(pullServiceConfig{
@@ -91,7 +124,7 @@ func TestUpdateProcessTable(t *testing.T) {
 	test := func(newMQs, expected []*message.Queue, expectedChanged bool) {
 		changed := pc.updateProcessTable(topic, newMQs)
 		assert.Equal(t, expectedChanged, changed)
-		mqs := pc.consumerService.messageQueues()
+		mqs := pc.consumeService.messageQueues()
 		assertMQs(t, expected, mqs)
 	}
 	newMQs := []*message.Queue{{}, {QueueID: 1}}
@@ -143,7 +176,7 @@ func assertMQs(t *testing.T, mqs1 []*message.Queue, mqs2 []message.Queue) {
 func TestUpdateThresholdOfQueue(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	consumerService := &fakeConsumerService{}
-	pc.consumerService = consumerService
+	pc.consumeService = consumerService
 
 	consumerService.queues = []message.Queue{{}, {QueueID: 1}}
 
@@ -185,10 +218,10 @@ func TestReblance(t *testing.T) {
 	consumerService := &fakeConsumerService{}
 	pc.offseter = &fakeOffseter{}
 	pc.client = &fakeMQClient{}
-	pc.consumerService = consumerService
+	pc.consumeService = consumerService
 
 	pc.topicRouters = route.NewTopicRouterTable()
-	pc.subscribeQueues = client.NewQueueTable()
+	pc.subscribeQueues = client.NewSubscribeQueueTable()
 
 	clientID := "a"
 	pc.ClientID = clientID
@@ -326,4 +359,81 @@ func TestComputeFromTimestamp(t *testing.T) {
 	offset, err = pc.computeFromTimestamp(q)
 	assert.Equal(t, mqClient.searchOffsetByTimestampErr, err)
 	mqClient.searchOffsetByTimestampErr = nil
+}
+
+func TestPushPull(t *testing.T) {
+	pc := newTestConcurrentConsumer()
+	pr := &pullRequest{
+		group:        "g",
+		messageQueue: &message.Queue{},
+		processQueue: &processQueue{},
+		nextOffset:   0,
+	}
+
+	// dropped
+	pq := pr.processQueue
+	pq.drop()
+	pc.pull(pr)
+	assert.True(t, pq.lastPullTime.IsZero())
+	pq.dropped = normal
+
+	// bad state
+	pullService := pc.pullService.(*fakePullRequestDispatcher)
+	pc.State = rocketmq.StateCreating
+	pc.pull(pr)
+	assert.False(t, pq.lastPullTime.IsZero(), pq.lastPullTime)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
+	pullService.runSubmitLater = false
+	pc.State = rocketmq.StateRunning
+
+	// pause
+	pc.Pause()
+	pc.pull(pr)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenPause, pullService.delay)
+	pc.UnPause()
+	pullService.runSubmitLater = false
+
+	// over count threshold
+	pq.msgCount = int32(pc.ThresholdCountOfQueue + 1)
+	pc.pull(pr)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenFlowControl, pullService.delay)
+	pullService.runSubmitLater = false
+	pq.msgCount = 0
+
+	// over size threshold
+	pq.msgSize = int64(pc.ThresholdSizeOfQueue + 1)
+	pc.pull(pr)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenFlowControl, pullService.delay)
+	pullService.runSubmitLater = false
+	pq.msgSize = 0
+
+	// consumer flow controll
+	cs := &fakeConsumerService{}
+	pc.consumeService = cs
+	cs.flowControllRet = true
+	bk := pc.queueControlFlowTotal
+	pc.pull(pr)
+	assert.Equal(t, 1+bk, pc.queueControlFlowTotal)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenFlowControl, pullService.delay)
+	pullService.runSubmitLater = false
+	cs.flowControllRet = false
+
+	// consume service check failed
+	cs.checkRet = errors.New("check failed")
+	pc.pull(pr)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
+	cs.checkRet = nil
+	pullService.runSubmitLater = false
+	pullService.delay = 0
+
+	// no subscription
+	pc.pull(pr)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
 }

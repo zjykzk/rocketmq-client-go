@@ -2,7 +2,6 @@ package consumer
 
 import (
 	"container/heap"
-	"fmt"
 	"testing"
 	"time"
 
@@ -48,13 +47,11 @@ func TestDelayedWorkQueue(t *testing.T) {
 	}()
 
 	q.offer(&fakeRunnable{id: 4}, time.Millisecond*5)
-	fmt.Printf("offert %+v\n", q.tasks())
 	close(waitOffer)
 	<-waitTake
 
 	task1, _ := q.take()
 	assert.Equal(t, 1, task1.task.(*fakeRunnable).id)
-	fmt.Printf("take %+v\n", q.tasks())
 	task3, _ := q.take()
 	assert.Equal(t, 3, task3.task.(*fakeRunnable).id)
 

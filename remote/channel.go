@@ -40,7 +40,7 @@ type Handler interface {
 	OnDeactive(ctx *ChannelContext)
 	OnClose(ctx *ChannelContext)
 	OnError(ctx *ChannelContext, err error)
-	OnMessage(ctx *ChannelContext, m interface{})
+	OnMessage(ctx *ChannelContext, cmd *Command)
 }
 
 // ChannelConfig contains channel's configuration

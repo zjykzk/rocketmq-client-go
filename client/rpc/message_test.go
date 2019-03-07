@@ -12,7 +12,7 @@ import (
 )
 
 type fakeRemoteClient struct {
-	remote.MockClient
+	remote.FakeClient
 
 	requestSyncErr error
 	command        remote.Command

@@ -27,7 +27,7 @@ func TestSchedule(t *testing.T) {
 
 func TestUpdateTopicSubscribe(t *testing.T) {
 	c := &consumer{
-		subscribeQueues: client.NewQueueTable(),
+		subscribeQueues: client.NewSubscribeQueueTable(),
 		subscribeData:   client.NewSubcribeTable(),
 		topicRouters:    route.NewTopicRouterTable(),
 	}
@@ -77,7 +77,7 @@ func TestFindBrokerAddr(t *testing.T) {
 func TestSubscribe(t *testing.T) {
 	c := &consumer{
 		subscribeData:   client.NewSubcribeTable(),
-		subscribeQueues: client.NewQueueTable(),
+		subscribeQueues: client.NewSubscribeQueueTable(),
 		topicRouters:    route.NewTopicRouterTable(),
 	}
 	c.Subscribe("topic", "")

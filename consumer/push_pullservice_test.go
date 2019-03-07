@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zjykzk/rocketmq-client-go/log"
@@ -55,4 +56,17 @@ func TestPullService(t *testing.T) {
 	assert.Equal(t, 1, count())
 
 	ps.shutdown()
+}
+
+func TestSubmitRequestLater(t *testing.T) {
+	ps, err := newPullService(pullServiceConfig{
+		messagePuller: &fakeMessagePuller{},
+		logger:        log.Std,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ps.submitRequestLater(&pullRequest{}, time.Second)
+	assert.Equal(t, 1, len(ps.sched.queue.tasks()))
 }

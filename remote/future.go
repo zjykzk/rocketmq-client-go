@@ -21,6 +21,8 @@ type responseFuture struct {
 	timeout   time.Duration
 	id        int64
 	ctx       *ChannelContext
+
+	callback func(resp *Command, err error)
 }
 
 // get return the reponse command
@@ -40,11 +42,14 @@ func (f *responseFuture) String() string {
 	return fmt.Sprintf("id:%d, start:%s, timeout:%s, ctx:%s", f.id, f.startTime, f.timeout, f.ctx)
 }
 
-func newFuture(timeout time.Duration, id int64, ctx *ChannelContext) *responseFuture {
+func newFuture(
+	timeout time.Duration, id int64, ctx *ChannelContext, callback func(*Command, error),
+) *responseFuture {
 	r := futurePool.Get().(*responseFuture)
 	r.timeout = timeout
 	r.id = id
 	r.startTime = time.Now()
 	r.ctx = ctx
+	r.callback = callback
 	return r
 }

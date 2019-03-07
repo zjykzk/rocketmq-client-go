@@ -46,8 +46,8 @@ func (h *fakeHandler) OnError(ctx *ChannelContext, err error) {
 	h.logger.Infof("error %s, %s", ctx, err)
 }
 
-func (h *fakeHandler) OnMessage(ctx *ChannelContext, m interface{}) {
-	h.logger.Infof("%v", m)
+func (h *fakeHandler) OnMessage(ctx *ChannelContext, cmd *Command) {
+	h.logger.Infof("%v", cmd)
 }
 func handleError(err error) {
 	fmt.Printf("error:%v\n", err)

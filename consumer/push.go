@@ -3,6 +3,7 @@ package consumer
 import (
 	"errors"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/zjykzk/rocketmq-client-go"
@@ -28,15 +29,33 @@ const (
 	defaultPushMaxReconsumeTimes                    = -1
 )
 
+// times defined
+const (
+	PullTimeDelayWhenException   = time.Second * 3
+	PullTimeDelayWhenFlowControl = time.Millisecond * 50
+	PullTimeDelayWhenPause       = time.Second
+	BrokerSuspendMaxTime         = time.Second * 15
+	ConsumerTimeoutWhenSuspend   = time.Second * 30
+)
+
 type consumerService interface {
 	messageQueues() []message.Queue
 	removeOldMessageQueue(mq *message.Queue) bool
 	insertNewMessageQueue(mq *message.Queue) (*processQueue, bool)
+	flowControl(*processQueue) bool
+	check(*processQueue) error
+}
+
+type pullRequestDispatcher interface {
+	submitRequestImmediately(r *pullRequest)
+	submitRequestLater(r *pullRequest, delay time.Duration)
+	shutdown()
 }
 
 // PushConsumer the consumer with push model
 type PushConsumer struct {
 	*consumer
+
 	MaxReconsumeTimes       int
 	LastestConsumeTimestamp time.Time
 	ConsumeTimeout          time.Duration
@@ -53,12 +72,14 @@ type PushConsumer struct {
 	PostSubscriptionWhenPull   bool
 	ConsumeMessageBatchMaxSize int
 
-	consumerService        consumerService
-	consumerServiceBuilder func() (consumerService, error)
+	pause                 uint32
+	consumeService        consumerService
+	consumeServiceBuilder func() (consumerService, error)
+	subscription          map[string]string
 
-	subscription map[string]string
+	queueControlFlowTotal uint32
 
-	pullService *pullService
+	pullService pullRequestDispatcher
 }
 
 func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *PushConsumer {
@@ -111,7 +132,7 @@ func NewConcurrentConsumer(
 	}
 	pc = newPushConsumer(group, namesrvAddrs, logger)
 
-	pc.consumerServiceBuilder = func() (consumerService, error) {
+	pc.consumeServiceBuilder = func() (consumerService, error) {
 		return newConsumeConcurrentlyService(concurrentlyServiceConfig{
 			consumeServiceConfig: consumeServiceConfig{
 				group:           group,
@@ -141,7 +162,7 @@ func (pc *PushConsumer) start() error {
 		return err
 	}
 
-	pc.consumerService, err = pc.consumerServiceBuilder()
+	pc.consumeService, err = pc.consumeServiceBuilder()
 	if err != nil {
 		pc.logger.Errorf("build consumer service error:%s", err)
 		return err
@@ -254,7 +275,7 @@ func (pc *PushConsumer) reblance(topic string) {
 }
 
 func (pc *PushConsumer) updateProcessTable(topic string, mqs []*message.Queue) bool {
-	tmpMQs := pc.consumerService.messageQueues()
+	tmpMQs := pc.consumeService.messageQueues()
 	currentMQs := make([]*message.Queue, len(tmpMQs))
 	for i := range currentMQs {
 		currentMQs[i] = &tmpMQs[i]
@@ -263,7 +284,7 @@ func (pc *PushConsumer) updateProcessTable(topic string, mqs []*message.Queue) b
 	changed := false
 	// remove the mq not processed by the node
 	for _, mq := range sub(currentMQs, mqs) {
-		if pc.consumerService.removeOldMessageQueue(mq) {
+		if pc.consumeService.removeOldMessageQueue(mq) {
 			changed = true
 		}
 	}
@@ -278,7 +299,7 @@ func (pc *PushConsumer) updateProcessTable(topic string, mqs []*message.Queue) b
 			continue
 		}
 
-		if pq, ok := pc.consumerService.insertNewMessageQueue(mq); ok {
+		if pq, ok := pc.consumeService.insertNewMessageQueue(mq); ok {
 			pc.logger.Infof("reblance: %s, new message queue added:%s", pc.Group(), mq)
 			pullRequests = append(pullRequests, pullRequest{
 				group:        pc.Group(),
@@ -404,7 +425,7 @@ func (pc *PushConsumer) searchOffset(mq *message.Queue) (int64, error) {
 }
 
 func (pc *PushConsumer) updateThresholdOfQueue() {
-	queueCount := len(pc.consumerService.messageQueues())
+	queueCount := len(pc.consumeService.messageQueues())
 	if queueCount <= 0 {
 		return
 	}
@@ -426,5 +447,127 @@ func (pc *PushConsumer) updateThresholdOfQueue() {
 }
 
 func (pc *PushConsumer) pull(r *pullRequest) {
-	// TODO
+	pq := r.processQueue
+	if pq.isDropped() {
+		pc.logger.Infof("pull request:%s is dropped", r)
+		return
+	}
+	pq.updatePullTime(time.Now())
+
+	if pc.consumer.CheckRunning() != nil {
+		pc.logger.Infof("push consumer is not running, current:%s", pc.State)
+		pc.pullService.submitRequestLater(r, PullTimeDelayWhenException)
+		return
+	}
+
+	if pc.isPause() {
+		pc.pullService.submitRequestLater(r, PullTimeDelayWhenPause)
+		pc.logger.Infof("push consumer is pausing")
+		return
+	}
+
+	if pc.doesFlowControl(r) {
+		return
+	}
+
+	if err := pc.consumeService.check(pq); err != nil {
+		pc.pullService.submitRequestLater(r, PullTimeDelayWhenException)
+		pc.logger.Infof("consume service checking failed:%s", err)
+		return
+	}
+
+	sub := pc.subscribeData.Get(r.messageQueue.Topic)
+	if sub == nil {
+		pc.pullService.submitRequestLater(r, PullTimeDelayWhenException)
+		pc.logger.Infof("cannot find subsciption %s", r.messageQueue.Topic)
+		return
+	}
+}
+
+func (pc *PushConsumer) doesFlowControl(r *pullRequest) bool {
+	if pc.isCountFlowControl(r) {
+		return true
+	}
+
+	if pc.isSizeFlowControl(r) {
+		return true
+	}
+
+	if pc.isConsumeServiceFlowControl(r) {
+		return true
+	}
+	return false
+}
+
+func (pc *PushConsumer) isCountFlowControl(r *pullRequest) bool {
+	pq := r.processQueue
+	cachedCount := pq.messageCount()
+	if cachedCount <= int32(pc.ThresholdCountOfQueue) {
+		return false
+	}
+
+	pc.pullService.submitRequestLater(r, PullTimeDelayWhenFlowControl)
+	pc.queueControlFlowTotal++
+
+	if pc.queueControlFlowTotal%1000 == 0 {
+		min, max := pq.offsetRange()
+		pc.logger.Warnf(
+			"COUNT FLOW CONTROL:the cached message count exceeds the threshold %d,"+
+				"minOffset:%d,maxOffset:%d,count:%d, pull request:%s, flow controll total:%d",
+			pc.ThresholdCountOfQueue, min, max, cachedCount, r, pc.queueControlFlowTotal,
+		)
+	}
+	return true
+}
+
+func (pc *PushConsumer) isSizeFlowControl(r *pullRequest) bool {
+	pq := r.processQueue
+	cachedSize := pq.messageSize()
+	if cachedSize <= int64(pc.ThresholdSizeOfQueue) {
+		return false
+	}
+
+	pc.pullService.submitRequestLater(r, PullTimeDelayWhenFlowControl)
+	pc.queueControlFlowTotal++
+
+	if pc.queueControlFlowTotal%1000 == 0 {
+		pc.logger.Warnf(
+			"SIZE FLOW CONTROL:the cached message size exceeds the threshold %d,size:%dM, pull request:%s, flow controll total:%d",
+			pc.ThresholdSizeOfQueue, cachedSize>>20, r, pc.queueControlFlowTotal,
+		)
+	}
+	return true
+}
+
+func (pc *PushConsumer) isConsumeServiceFlowControl(r *pullRequest) bool {
+	pq := r.processQueue
+	if !pc.consumeService.flowControl(pq) {
+		return false
+	}
+	pc.pullService.submitRequestLater(r, PullTimeDelayWhenFlowControl)
+	pc.queueControlFlowTotal++
+
+	if pc.queueControlFlowTotal%1000 == 0 {
+		min, max := pq.offsetRange()
+		pc.logger.Warnf(
+			"CONSUME SERVICE FLOW FLOW CONTROL:minOffset:%d,maxOffset:%d,pull request:%s,flow controll total:%d",
+			min, max, r, pc.queueControlFlowTotal,
+		)
+	}
+
+	return true
+}
+
+// Pause pause the consumer, this operation is thread-safe
+func (pc *PushConsumer) Pause() {
+	atomic.StoreUint32(&pc.pause, 1)
+}
+
+// UnPause un-pause the consumer, this operation is thread-safe
+func (pc *PushConsumer) UnPause() {
+	atomic.StoreUint32(&pc.pause, 0)
+}
+
+func (pc *PushConsumer) isPause() bool {
+	return atomic.LoadUint32(&pc.pause) == 1
 }

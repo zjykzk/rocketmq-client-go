@@ -106,3 +106,23 @@ func getConsumeStartTime(m *message.Ext) int64 {
 	i, _ := strconv.ParseInt(v, 10, 64)
 	return i
 }
+
+func (pq *processQueue) messageCount() int32 {
+	return atomic.LoadInt32(&pq.msgCount)
+}
+
+func (pq *processQueue) messageSize() int64 {
+	return atomic.LoadInt64(&pq.msgSize)
+}
+
+func (pq *processQueue) offsetRange() (min, max int64) {
+	pq.RLock()
+	if pq.messages.Size() > 0 {
+		minK, _ := pq.messages.First()
+		maxK, _ := pq.messages.Last()
+		min, max = int64(minK.(offset)), int64(maxK.(offset))
+	}
+	pq.RUnlock()
+
+	return
+}
