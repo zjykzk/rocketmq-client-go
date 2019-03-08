@@ -5,9 +5,10 @@ const (
 	PullCommitOffset = 1 << iota
 	PullSuspend
 	PullSubscribe
+	PullClassFilter
 )
 
-func buildPullFlag(commitOffset, suspend, subscribe bool) (flag int32) {
+func buildPullFlag(commitOffset, suspend, subscribe, classFilter bool) (flag int32) {
 	if commitOffset {
 		flag |= PullCommitOffset
 	}
@@ -18,6 +19,10 @@ func buildPullFlag(commitOffset, suspend, subscribe bool) (flag int32) {
 
 	if subscribe {
 		flag |= PullSubscribe
+	}
+
+	if classFilter {
+		flag |= PullClassFilter
 	}
 
 	return

@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,22 +40,26 @@ func testSendback(c *PullConsumer, t *testing.T) {
 	assert.Nil(t, err)
 
 	// bad broker
+	client := c.client.(*fakeMQClient)
+	client.findBrokerAddrErr = errors.New("find broker failed")
 	err = c.SendBack(msg, -1, "", "bad broker")
 	assert.NotNil(t, err)
+	client.findBrokerAddrErr = nil
 
 	// ok broker
-	client := c.client.(*fakeMQClient)
-	brokerAddr := client.brokderAddr
-	client.brokderAddr = "ok broker"
 	err = c.SendBack(msg, -1, "", "bad broker")
 	assert.Nil(t, err)
-	client.brokderAddr = brokerAddr
 }
 
 func testPullSync(c *PullConsumer, t *testing.T) {
 	q := &message.Queue{}
+
+	client := c.client.(*fakeMQClient)
+	client.findBrokerAddrErr = errors.New("find broker failed")
 	pr, err := c.PullSync(q, "", 0, 10)
-	assert.Equal(t, "fake find broker addr error", err.Error())
+	assert.Equal(t, client.findBrokerAddrErr, err)
+	client.findBrokerAddrErr = nil
+
 	pr, err = c.PullSync(q, "", 0, 10)
 	assert.Equal(t, "fake pull error", err.Error())
 	pr, err = c.PullSync(q, "", 0, 10)

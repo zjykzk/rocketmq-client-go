@@ -51,49 +51,12 @@ func (ms *fakeSendback) messageCount() int {
 	return r
 }
 
-type fakeOffseter struct {
-	runUpdate     bool
-	offset        int64
-	readOffsetErr error
-
-	sync.Mutex
-}
-
-func (m *fakeOffseter) persist() error {
-	return nil
-}
-
-func (m *fakeOffseter) updateQueues(...*message.Queue) {
-	return
-}
-
-func (m *fakeOffseter) updateOffsetIfGreater(_ *message.Queue, offset int64) {
-	m.Lock()
-	m.offset = offset
-	m.runUpdate = true
-	m.Unlock()
-}
-
-func (m *fakeOffseter) persistOne(_ *message.Queue) {
-}
-
-func (m *fakeOffseter) removeOffset(_ *message.Queue) (offset int64, ok bool) {
-	offset = m.offset
-	return
-}
-
-func (m *fakeOffseter) readOffset(_ *message.Queue, _ int) (offset int64, err error) {
-	err = m.readOffsetErr
-	offset = m.offset
-	return
-}
-
 func newTestConcurrentlyService(t *testing.T) *consumeConcurrentlyService {
 	cs, err := newConsumeConcurrentlyService(concurrentlyServiceConfig{
 		consumeServiceConfig: consumeServiceConfig{
 			group:           "test concurrent consume service",
 			messageSendBack: &fakeSendback{},
-			offseter:        &fakeOffseter{},
+			offseter:        &fakeOffsetStorer{},
 			logger:          log.Std,
 		},
 		consumer:             &fakeConcurrentlyConsumer{},
@@ -190,7 +153,7 @@ func TestSubmitRequestSuccess(t *testing.T) {
 func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 	t.Run("broadcasting", func(t *testing.T) {
 		cs := newTestConcurrentlyService(t)
-		offsetUpdater := cs.offseter.(*fakeOffseter)
+		offsetUpdater := cs.offseter.(*fakeOffsetStorer)
 		cs.messageModel = BroadCasting
 
 		msgs := []*message.Ext{&message.Ext{}}
@@ -226,7 +189,7 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 
 	t.Run("clustering", func(t *testing.T) {
 		cs := newTestConcurrentlyService(t)
-		offsetUpdater := cs.offseter.(*fakeOffseter)
+		offsetUpdater := cs.offseter.(*fakeOffsetStorer)
 		sendbacker := cs.messageSendBack.(*fakeSendback)
 		cs.messageModel = Clustering
 		mq := &message.Queue{}
@@ -294,7 +257,7 @@ func TestConsumeConcurrentlyProcessResultConsumeLater(t *testing.T) {
 
 func TestConsumeConcurrentlyProcessResultSuc(t *testing.T) {
 	cs := newTestConcurrentlyService(t)
-	offsetUpdater := cs.offseter.(*fakeOffseter)
+	offsetUpdater := cs.offseter.(*fakeOffsetStorer)
 	sendbacker := cs.messageSendBack.(*fakeSendback)
 	t.Run("broadcasting", func(t *testing.T) {
 		cs.messageModel = BroadCasting

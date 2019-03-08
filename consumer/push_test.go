@@ -15,48 +15,6 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
-type fakeConsumerService struct {
-	queues    []message.Queue
-	runInsert bool
-
-	insertRet bool
-	pt        *processQueue
-
-	removeRet bool
-
-	flowControllRet bool
-	checkRet        error
-}
-
-func (m *fakeConsumerService) messageQueues() []message.Queue {
-	return m.queues
-}
-
-func (m *fakeConsumerService) removeOldMessageQueue(mq *message.Queue) bool {
-	nqs := make([]message.Queue, 0, len(m.queues))
-	for _, q := range m.queues {
-		if q != *mq {
-			nqs = append(nqs, q)
-		}
-	}
-	m.queues = nqs
-	return m.removeRet
-}
-
-func (m *fakeConsumerService) insertNewMessageQueue(mq *message.Queue) (*processQueue, bool) {
-	m.runInsert = true
-	m.queues = append(m.queues, *mq)
-	return m.pt, m.insertRet
-}
-
-func (m *fakeConsumerService) flowControl(*processQueue) bool {
-	return m.flowControllRet
-}
-
-func (m *fakeConsumerService) check(*processQueue) error {
-	return m.checkRet
-}
-
 type fakePullRequestDispatcher struct {
 	runSubmitImmediately bool
 	runSubmitLater       bool
@@ -83,6 +41,7 @@ func newTestConcurrentConsumer() *PushConsumer {
 	)
 	pc.client = &fakeMQClient{}
 	pc.pullService = &fakePullRequestDispatcher{}
+	pc.offsetStorer = &fakeOffsetStorer{}
 	pc.subscribeData = client.NewSubcribeTable()
 	if err != nil {
 		panic(err)
@@ -110,8 +69,8 @@ func TestNewPushConsumer(t *testing.T) {
 
 func TestUpdateProcessTable(t *testing.T) {
 	pc := newTestConcurrentConsumer()
-	offseter, consumerService := &fakeOffseter{}, &fakeConsumerService{}
-	pc.offseter, pc.consumeService = offseter, consumerService
+	offseter, consumerService := &fakeOffsetStorer{}, &fakeConsumerService{}
+	pc.offsetStorer, pc.consumeService = offseter, consumerService
 
 	mmp := &fakeMessagePuller{}
 	pc.pullService, _ = newPullService(pullServiceConfig{
@@ -122,7 +81,7 @@ func TestUpdateProcessTable(t *testing.T) {
 	topic := "TestUpdateProcessTable"
 
 	test := func(newMQs, expected []*message.Queue, expectedChanged bool) {
-		changed := pc.updateProcessTable(topic, newMQs)
+		changed := pc.updateProcessTableAndDispatchPullRequest(topic, newMQs)
 		assert.Equal(t, expectedChanged, changed)
 		mqs := pc.consumeService.messageQueues()
 		assertMQs(t, expected, mqs)
@@ -216,7 +175,7 @@ func TestUpdateSubscribeVersion(t *testing.T) {
 func TestReblance(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	consumerService := &fakeConsumerService{}
-	pc.offseter = &fakeOffseter{}
+	pc.offsetStorer = &fakeOffsetStorer{}
 	pc.client = &fakeMQClient{}
 	pc.consumeService = consumerService
 
@@ -243,8 +202,8 @@ func TestReblance(t *testing.T) {
 func TestComputeFromLastOffset(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	offseter, mqClient := &fakeOffseter{}, &fakeMQClient{}
-	pc.offseter, pc.client = offseter, mqClient
+	offseter, mqClient := &fakeOffsetStorer{}, &fakeMQClient{}
+	pc.offsetStorer, pc.client = offseter, mqClient
 
 	pc.FromWhere = consumeFromLastOffset
 	mqClient.brokderAddr = "fake"
@@ -292,8 +251,8 @@ func TestComputeFromLastOffset(t *testing.T) {
 func TestComputeFromFirstOffset(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	offseter, mqClient := &fakeOffseter{}, &fakeMQClient{}
-	pc.offseter, pc.client = offseter, mqClient
+	offseter, mqClient := &fakeOffsetStorer{}, &fakeMQClient{}
+	pc.offsetStorer, pc.client = offseter, mqClient
 
 	pc.FromWhere = consumeFromFirstOffset
 	mqClient.brokderAddr = "fake"
@@ -320,8 +279,8 @@ func TestComputeFromFirstOffset(t *testing.T) {
 func TestComputeFromTimestamp(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 
-	offseter, mqClient := &fakeOffseter{}, &fakeMQClient{}
-	pc.offseter, pc.client = offseter, mqClient
+	offseter, mqClient := &fakeOffsetStorer{}, &fakeMQClient{}
+	pc.offsetStorer, pc.client = offseter, mqClient
 
 	pc.FromWhere = consumeFromTimestamp
 	mqClient.brokderAddr = "fake"
@@ -362,7 +321,7 @@ func TestComputeFromTimestamp(t *testing.T) {
 }
 
 func TestPushPull(t *testing.T) {
-	pc := newTestConcurrentConsumer()
+	c := newTestConcurrentConsumer()
 	pr := &pullRequest{
 		group:        "g",
 		messageQueue: &message.Queue{},
@@ -373,39 +332,39 @@ func TestPushPull(t *testing.T) {
 	// dropped
 	pq := pr.processQueue
 	pq.drop()
-	pc.pull(pr)
+	c.pull(pr)
 	assert.True(t, pq.lastPullTime.IsZero())
 	pq.dropped = normal
 
 	// bad state
-	pullService := pc.pullService.(*fakePullRequestDispatcher)
-	pc.State = rocketmq.StateCreating
-	pc.pull(pr)
+	pullService := c.pullService.(*fakePullRequestDispatcher)
+	c.State = rocketmq.StateCreating
+	c.pull(pr)
 	assert.False(t, pq.lastPullTime.IsZero(), pq.lastPullTime)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
 	pullService.runSubmitLater = false
-	pc.State = rocketmq.StateRunning
+	c.State = rocketmq.StateRunning
 
 	// pause
-	pc.Pause()
-	pc.pull(pr)
+	c.Pause()
+	c.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenPause, pullService.delay)
-	pc.UnPause()
+	c.UnPause()
 	pullService.runSubmitLater = false
 
 	// over count threshold
-	pq.msgCount = int32(pc.thresholdCountOfQueue + 1)
-	pc.pull(pr)
+	pq.msgCount = int32(c.thresholdCountOfQueue + 1)
+	c.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenFlowControl, pullService.delay)
 	pullService.runSubmitLater = false
 	pq.msgCount = 0
 
 	// over size threshold
-	pq.msgSize = int64(pc.thresholdSizeOfQueue + 1)
-	pc.pull(pr)
+	pq.msgSize = int64(c.thresholdSizeOfQueue + 1)
+	c.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenFlowControl, pullService.delay)
 	pullService.runSubmitLater = false
@@ -413,11 +372,11 @@ func TestPushPull(t *testing.T) {
 
 	// consumer flow controll
 	cs := &fakeConsumerService{}
-	pc.consumeService = cs
+	c.consumeService = cs
 	cs.flowControllRet = true
-	bk := pc.queueControlFlowTotal
-	pc.pull(pr)
-	assert.Equal(t, 1+bk, pc.queueControlFlowTotal)
+	bk := c.queueControlFlowTotal
+	c.pull(pr)
+	assert.Equal(t, 1+bk, c.queueControlFlowTotal)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenFlowControl, pullService.delay)
 	pullService.runSubmitLater = false
@@ -425,7 +384,7 @@ func TestPushPull(t *testing.T) {
 
 	// consume service check failed
 	cs.checkRet = errors.New("check failed")
-	pc.pull(pr)
+	c.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
 	cs.checkRet = nil
@@ -433,7 +392,70 @@ func TestPushPull(t *testing.T) {
 	pullService.delay = 0
 
 	// no subscription
-	pc.pull(pr)
+	c.pull(pr)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
+	pullService.runSubmitLater = false
+	pullService.delay = 0
+
+	c.subscribeData.Put(pr.messageQueue.Topic, &client.SubscribeData{})
+
+	offsetStorer := c.offsetStorer.(*fakeOffsetStorer)
+	c.MessageModel = Clustering
+
+	// commit offset
+	c.pull(pr)
+	assert.True(t, offsetStorer.runReadOffset)
+	assert.Equal(t, ReadOffsetFromMemory, offsetStorer.readType)
+	offsetStorer.runReadOffset = false
+
+	// find broker error
+	mqClient := c.client.(*fakeMQClient)
+	mqClient.findBrokerAddrErr = errors.New("find broker failed")
+	c.pull(pr)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
+	pullService.runSubmitLater = false
+	pullService.delay = 0
+	mqClient.findBrokerAddrErr = nil
+
+	// bad version
+	c.subscribeData.Put(pr.messageQueue.Topic, &client.SubscribeData{Type: "a>1"})
+	mqClient.findBrokerAddrRet.Version = 0
+	c.pull(pr)
+	assert.True(t, pullService.runSubmitLater)
+	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
+	pullService.runSubmitLater = false
+	pullService.delay = 0
+	mqClient.findBrokerAddrErr = nil
+	c.subscribeData.Put(pr.messageQueue.Topic, &client.SubscribeData{})
+
+	// check header
+	c.subscribeData.Put(pr.messageQueue.Topic, &client.SubscribeData{
+		Type:    ExprTypeSQL92,
+		Version: 10000,
+		Expr:    "a>1",
+	})
+	offsetStorer.offset = 123
+	mqClient.findBrokerAddrRet.Version = 10000
+	c.pull(pr)
+	header := mqClient.pullHeader
+	assert.Equal(t, int32(c.pullBatchSize), header.MaxCount)
+	assert.Equal(t, int64(123), header.CommitOffset)
+	assert.Equal(t, "a>1", header.Subscription)
+	assert.Equal(t, ExprTypeSQL92, header.ExpressionType)
+	assert.Equal(t, int64(10000), header.SubVersion)
+	assert.Equal(t, buildPullFlag(true, true, false, false), header.SysFlag)
+
+	// post subscription when pull
+	c.postSubscriptionWhenPull = true
+	c.pull(pr)
+	header = mqClient.pullHeader
+	assert.Equal(t, buildPullFlag(true, true, true, false), header.SysFlag)
+
+	// send failed
+	mqClient.pullAsyncErr = errors.New("pull failed")
+	c.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
 }

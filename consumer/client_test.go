@@ -24,6 +24,12 @@ type fakeMQClient struct {
 
 	getConsumerIDsErr error
 	clientIDs         []string
+
+	findBrokerAddrErr error
+	findBrokerAddrRet client.FindBrokerResult
+
+	pullHeader   *rpc.PullHeader
+	pullAsyncErr error
 }
 
 func (c *fakeMQClient) RegisterConsumer(co client.Consumer) error { return nil }
@@ -32,13 +38,7 @@ func (c *fakeMQClient) SendHeartbeat()                            {}
 func (c *fakeMQClient) FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (
 	*client.FindBrokerResult, error,
 ) {
-	if c.brokderAddr != "" {
-		return &client.FindBrokerResult{
-			Addr:    c.brokderAddr,
-			IsSlave: true,
-		}, nil
-	}
-	return nil, errors.New("fake find broker addr error")
+	return &c.findBrokerAddrRet, c.findBrokerAddrErr
 }
 
 func (c *fakeMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
@@ -85,8 +85,11 @@ func (c *fakeMQClient) PullMessageSync(
 	}
 	return pr, nil
 }
-func (c *fakeMQClient) PullMessageAsync(addr string, header *rpc.PullHeader, to time.Duration, callback func(*rpc.PullResponse, error)) error {
-	return nil
+func (c *fakeMQClient) PullMessageAsync(
+	addr string, header *rpc.PullHeader, to time.Duration, callback func(*rpc.PullResponse, error),
+) error {
+	c.pullHeader = header
+	return c.pullAsyncErr
 }
 func (c *fakeMQClient) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) error {
 	c.sendBackAddr = addr

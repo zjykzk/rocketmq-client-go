@@ -11,7 +11,6 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
-	"github.com/zjykzk/rocketmq-client-go/remote"
 )
 
 const (
@@ -104,7 +103,7 @@ func (c *PullConsumer) reblance(topic string) {
 		return
 	}
 
-	c.offseter.updateQueues(newQueues...)
+	c.offsetStorer.updateQueues(newQueues...)
 
 	if c.messageQueueChanger != nil && messageQueueChanged(c.currentMessageQs, newQueues) {
 		c.messageQueueChanger.Change(topic, allQueues, newQueues)
@@ -174,14 +173,14 @@ func (c *PullConsumer) pullSync(
 	}
 
 	resp, err := c.client.PullMessageSync(
-		addr,
+		addr.Addr,
 		&rpc.PullHeader{
 			ConsumerGroup:        c.GroupName,
 			Topic:                q.Topic,
 			QueueID:              q.QueueID,
 			QueueOffset:          offset,
 			MaxCount:             int32(maxCount),
-			SysFlag:              buildPullFlag(false, block, true),
+			SysFlag:              buildPullFlag(false, block, true, false),
 			CommitOffset:         0,
 			SuspendTimeoutMillis: int64(c.brokerSuspendMaxTime / time.Millisecond),
 			Subscription:         expr,
@@ -194,66 +193,7 @@ func (c *PullConsumer) pullSync(
 		return nil, err
 	}
 
-	c.brokerSuggester.put(q, int32(resp.SuggestBrokerID))
-	pr := &PullResult{
-		NextBeginOffset: resp.NextBeginOffset,
-		MinOffset:       resp.MinOffset,
-		MaxOffset:       resp.MaxOffset,
-		Messages:        resp.Messages,
-		Status:          calcStatusFromCode(resp.Code),
-	}
-
-	tags := ParseTags(expr)
-	if len(tags) > 0 {
-		pr.Messages = filterMessage(pr.Messages, tags)
-	}
-
-	return pr, nil
-}
-
-func (c *PullConsumer) findPullBrokerAddr(q *message.Queue) (string, error) {
-	addr, err := c.client.FindBrokerAddr(q.BrokerName, c.selectBrokerID(q), false)
-	if err != nil {
-		c.client.UpdateTopicRouterInfoFromNamesrv(q.Topic)
-		addr, err = c.client.FindBrokerAddr(q.BrokerName, c.selectBrokerID(q), false)
-		if err != nil {
-			return "", err
-		}
-	}
-	return addr.Addr, err
-}
-
-func calcStatusFromCode(code remote.Code) PullStatus {
-	switch code {
-	case rpc.Success:
-		return Found
-	case rpc.PullNotFound:
-		return NoNewMessage
-	case rpc.PullRetryImmediately:
-		return NoMatchedMessage
-	case rpc.PullOffsetMoved:
-		return OffsetIllegal
-	default:
-		panic("BUG:unprocess code:" + strconv.Itoa(int(code)))
-	}
-}
-
-func filterMessage(msgs []*message.Ext, tags []string) []*message.Ext {
-	needMsgs := make([]*message.Ext, 0, len(msgs))
-	for _, m := range msgs {
-		tag := m.GetTags()
-		if tag == "" {
-			continue
-		}
-
-		for _, t := range tags {
-			if tag == t {
-				needMsgs = append(needMsgs, m)
-				break
-			}
-		}
-	}
-	return needMsgs
+	return c.consumer.processPullResponse(resp, q, ParseTags(expr)), nil
 }
 
 // RunningInfo returns the consumter's running information

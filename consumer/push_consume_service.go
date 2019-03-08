@@ -19,11 +19,11 @@ type messageSendBack interface {
 	SendBack(m *message.Ext, delayLevel int, broker string) error
 }
 
-type consumeService struct {
+type baseConsumeService struct {
 	group                  string
 	messageModel           Model
 	messageSendBack        messageSendBack
-	offseter               offseter
+	offseter               offsetStorer
 	oldMessageQueueRemover func(*message.Queue) bool
 
 	processQueues       sync.Map
@@ -41,12 +41,12 @@ type consumeServiceConfig struct {
 	schedWorkerCount       int
 	messageModel           Model
 	messageSendBack        messageSendBack
-	offseter               offseter
+	offseter               offsetStorer
 	oldMessageQueueRemover func(*message.Queue) bool
 	logger                 log.Logger
 }
 
-func newConsumeService(conf consumeServiceConfig) (*consumeService, error) {
+func newConsumeService(conf consumeServiceConfig) (*baseConsumeService, error) {
 	if conf.group == "" {
 		return nil, errors.New("new consumer service error:empty group")
 	}
@@ -67,7 +67,7 @@ func newConsumeService(conf consumeServiceConfig) (*consumeService, error) {
 		conf.schedWorkerCount = 2
 	}
 
-	c := &consumeService{
+	c := &baseConsumeService{
 		group:                  conf.group,
 		messageModel:           conf.messageModel,
 		messageSendBack:        conf.messageSendBack,
@@ -81,13 +81,13 @@ func newConsumeService(conf consumeServiceConfig) (*consumeService, error) {
 	}
 
 	if c.oldMessageQueueRemover == nil {
-		c.oldMessageQueueRemover = c.removeOldMessageQueue
+		c.oldMessageQueueRemover = c.dropAndRemoveProcessQueue
 	}
 
 	return c, nil
 }
 
-func (cs *consumeService) resetRetryTopic(messages []*message.Ext) {
+func (cs *baseConsumeService) resetRetryTopic(messages []*message.Ext) {
 	retryTopic := retryTopic(cs.group)
 	for _, m := range messages {
 		if retryTopic == m.GetProperty(message.PropertyRetryTopic) {
@@ -96,7 +96,7 @@ func (cs *consumeService) resetRetryTopic(messages []*message.Ext) {
 	}
 }
 
-func (cs *consumeService) startFunc(f func(), period time.Duration) {
+func (cs *baseConsumeService) startFunc(f func(), period time.Duration) {
 	cs.wg.Add(1)
 	go func() {
 		ticker := time.NewTicker(period)
@@ -113,11 +113,11 @@ func (cs *consumeService) startFunc(f func(), period time.Duration) {
 	}()
 }
 
-func (cs *consumeService) start() {
+func (cs *baseConsumeService) start() {
 	cs.startFunc(cs.dropExpiredProcessQueues, time.Second*10)
 }
 
-func (cs *consumeService) shutdown() {
+func (cs *baseConsumeService) shutdown() {
 	cs.logger.Info("shutdown consume sevice START")
 	close(cs.exitChan)
 	cs.wg.Wait()
@@ -125,7 +125,7 @@ func (cs *consumeService) shutdown() {
 	cs.logger.Info("shutdown consume sevice END")
 }
 
-func (cs *consumeService) messageQueues() (mqs []message.Queue) {
+func (cs *baseConsumeService) messageQueues() (mqs []message.Queue) {
 	cs.processQueues.Range(func(k, _ interface{}) bool {
 		mqs = append(mqs, k.(message.Queue))
 		return true
@@ -133,7 +133,7 @@ func (cs *consumeService) messageQueues() (mqs []message.Queue) {
 	return
 }
 
-func (cs *consumeService) removeOldMessageQueue(mq *message.Queue) bool {
+func (cs *baseConsumeService) dropAndRemoveProcessQueue(mq *message.Queue) bool {
 	v, ok := cs.processQueues.Load(*mq)
 	if !ok {
 		return false
@@ -147,7 +147,7 @@ func (cs *consumeService) removeOldMessageQueue(mq *message.Queue) bool {
 	return true
 }
 
-func (cs *consumeService) dropExpiredProcessQueues() {
+func (cs *baseConsumeService) dropExpiredProcessQueues() {
 	cs.processQueues.Range(func(k, v interface{}) bool {
 		pq := (*processQueue)(unsafe.Pointer(reflect.ValueOf(v).Pointer()))
 		if !pq.isPullExpired(cs.pullExpiredInterval) {

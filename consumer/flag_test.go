@@ -7,7 +7,7 @@ import (
 )
 
 func TestPull(t *testing.T) {
-	f := buildPullFlag(true, true, true)
+	f := buildPullFlag(true, true, true, true)
 	assert.Equal(t, int32(1), f&PullCommitOffset)
 	f = ClearCommitOffset(f)
 	assert.Equal(t, int32(0), f&PullCommitOffset)

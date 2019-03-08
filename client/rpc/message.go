@@ -370,12 +370,14 @@ type registerFilterBody struct {
 
 // SubscribeData subscription information
 type SubscribeData struct {
-	Topic   string   `json:"topic"`
-	Expr    string   `json:"subString"`
-	Typ     string   `json:"expressionType"`
-	Tags    []string `json:"tagsSet"`
-	Codes   []uint32 `json:"codeSet"`
-	Version int64    `json:"subVersion"`
+	Topic             string   `json:"topic"`
+	Expr              string   `json:"subString"`
+	Type              string   `json:"expressionType"`
+	Tags              []string `json:"tagsSet"`
+	Codes             []uint32 `json:"codeSet"`
+	Version           int64    `json:"subVersion"`
+	IsClassFilterMode bool     `json:"classFilterMode"`
+	FilterClassSource string   `json:"-"`
 }
 
 // RegisterFilter register the filter to the broker

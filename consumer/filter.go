@@ -9,8 +9,32 @@ import (
 
 const (
 	subAll = "*"
-	// ExprTypeTag TAG literal
+	// ExprTypeTag tag filter
+	// Only support or operation such as
+	// "tag1 || tag2 || tag3", <br>
+	// If null or * expression,meaning subscribe all.
 	ExprTypeTag = "TAG"
+
+	// ExprTypeSQL92 sql filter
+	//
+	//Keywords:
+	//AND, OR, NOT, BETWEEN, IN, TRUE, FALSE, IS, NULL
+	//Boolean, like: TRUE, FALSE
+	//String, like: 'abc'
+	//Decimal, like: 123
+	//Float number, like: 3.1415
+	//
+	//Grammar:
+	//AND, OR
+	//>, >=, <, <=, =
+	//BETWEEN A AND B, equals to >=A AND <=B
+	//NOT BETWEEN A AND B, equals to >B OR <A
+	//IN ('a', 'b'), equals to ='a' OR ='b', this operation only support String type.
+	//IS NULL, IS NOT NULL, check parameter whether is null, or not.
+	//=TRUE, =FALSE, check parameter whether is true, or false.
+	//
+	//Example: (a > 10 AND a < 100) OR (b IS NOT NULL AND b=TRUE)
+	ExprTypeSQL92 = "SQL92"
 )
 
 // BuildSubscribeData build the subscribe data

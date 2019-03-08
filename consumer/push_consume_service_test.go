@@ -10,12 +10,12 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
-func newTestConsumeService(t *testing.T) *consumeService {
+func newTestConsumeService(t *testing.T) *baseConsumeService {
 	cs, err := newConsumeService(consumeServiceConfig{
 		group:           "test consume service",
 		messageSendBack: &fakeSendback{},
 		logger:          log.Std,
-		offseter:        &fakeOffseter{},
+		offseter:        &fakeOffsetStorer{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestNewService(t *testing.T) {
 		group:           "g",
 		logger:          log.Std,
 		messageSendBack: &fakeSendback{},
-		offseter:        &fakeOffseter{},
+		offseter:        &fakeOffsetStorer{},
 	})
 	assert.Nil(t, err)
 }
@@ -49,8 +49,8 @@ func TestRemoveOldMessageQueue(t *testing.T) {
 	cs := newTestConsumeService(t)
 	mq := &message.Queue{}
 	cs.processQueues.Store(message.Queue{}, &processQueue{})
-	assert.True(t, cs.removeOldMessageQueue(mq))
-	assert.False(t, cs.removeOldMessageQueue(mq))
+	assert.True(t, cs.dropAndRemoveProcessQueue(mq))
+	assert.False(t, cs.dropAndRemoveProcessQueue(mq))
 }
 
 type fakeProcessQueue struct {

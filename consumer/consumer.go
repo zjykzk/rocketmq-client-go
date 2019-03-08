@@ -15,6 +15,7 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
+	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -23,9 +24,10 @@ type queueAssigner interface {
 	Name() string
 }
 
-type offseter interface {
+type offsetStorer interface {
 	persist() error
 	updateQueues(...*message.Queue)
+	updateOffset(q *message.Queue, offset int64)
 	updateOffsetIfGreater(mq *message.Queue, offset int64)
 	persistOne(mq *message.Queue)
 	removeOffset(mq *message.Queue) (offset int64, ok bool)
@@ -77,7 +79,7 @@ type consumer struct {
 	topicRouters    *route.TopicRouterTable
 	reblancer       messageQueueReblancer
 	assigner        queueAssigner
-	offseter        offseter
+	offsetStorer    offsetStorer
 	startTime       time.Time
 
 	runnerInfo func() client.RunningInfo
@@ -202,7 +204,7 @@ func (c *consumer) scheduleTasks() {
 // Shutdown the works of consumer
 func (c *consumer) shutdown() {
 	c.client.UnregisterConsumer(c.GroupName)
-	c.offseter.persist()
+	c.offsetStorer.persist()
 	close(c.exitChan)
 	c.Wait()
 }
@@ -210,9 +212,9 @@ func (c *consumer) shutdown() {
 func (c *consumer) initOffset() (err error) {
 	switch c.MessageModel {
 	case BroadCasting:
-		c.offseter, err = newLocalStore(localStoreConfig{clientID: c.ClientID, group: c.GroupName})
+		c.offsetStorer, err = newLocalStore(localStoreConfig{clientID: c.ClientID, group: c.GroupName})
 	case Clustering:
-		c.offseter, err = newRemoteStore(remoteStoreConfig{offsetOperAdaptor{c}, c.logger})
+		c.offsetStorer, err = newRemoteStore(remoteStoreConfig{offsetOperAdaptor{c}, c.logger})
 	default:
 		err = fmt.Errorf("unknow message model:%v", c.MessageModel)
 	}
@@ -402,7 +404,7 @@ func (c *consumer) UpdateOffset(q *message.Queue, offset int64, oneway bool) err
 }
 
 func (c *consumer) PersistOffset() {
-	err := c.offseter.persist()
+	err := c.offsetStorer.persist()
 	if err != nil {
 		c.logger.Errorf("persist consume offset error:%s", err)
 	}
@@ -516,6 +518,69 @@ func (c *consumer) findSendBackBrokerAddr(broker, msgIDInBroker string) (string,
 		return a.String(), nil
 	}
 	return "", err
+}
+
+func (c *consumer) findPullBrokerAddr(q *message.Queue) (*client.FindBrokerResult, error) {
+	addr, err := c.client.FindBrokerAddr(q.BrokerName, c.selectBrokerID(q), false)
+	if err == nil {
+		return addr, err
+	}
+
+	c.client.UpdateTopicRouterInfoFromNamesrv(q.Topic)
+	addr, err = c.client.FindBrokerAddr(q.BrokerName, c.selectBrokerID(q), false)
+	return addr, err
+}
+
+func (c *consumer) processPullResponse(
+	resp *rpc.PullResponse, q *message.Queue, tags []string,
+) *PullResult {
+	c.brokerSuggester.put(q, int32(resp.SuggestBrokerID))
+	pr := &PullResult{
+		NextBeginOffset: resp.NextBeginOffset,
+		MinOffset:       resp.MinOffset,
+		MaxOffset:       resp.MaxOffset,
+		Messages:        resp.Messages,
+		Status:          calcStatusFromCode(resp.Code),
+	}
+
+	if len(tags) > 0 {
+		pr.Messages = filterMessage(pr.Messages, tags)
+	}
+
+	return pr
+}
+
+func calcStatusFromCode(code remote.Code) PullStatus {
+	switch code {
+	case rpc.Success:
+		return Found
+	case rpc.PullNotFound:
+		return NoNewMessage
+	case rpc.PullRetryImmediately:
+		return NoMatchedMessage
+	case rpc.PullOffsetMoved:
+		return OffsetIllegal
+	default:
+		panic("BUG:unprocess code:" + strconv.Itoa(int(code)))
+	}
+}
+
+func filterMessage(msgs []*message.Ext, tags []string) []*message.Ext {
+	needMsgs := make([]*message.Ext, 0, len(msgs))
+	for _, m := range msgs {
+		tag := m.GetTags()
+		if tag == "" {
+			continue
+		}
+
+		for _, t := range tags {
+			if tag == t {
+				needMsgs = append(needMsgs, m)
+				break
+			}
+		}
+	}
+	return needMsgs
 }
 
 type offsetOperAdaptor struct {

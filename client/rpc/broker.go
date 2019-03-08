@@ -100,22 +100,12 @@ func (p *Producer) String() string {
 
 // Consumer consumer's data in the heartbeat
 type Consumer struct {
-	Group        string  `json:"groupName"`
-	Type         string  `json:"consumeType"`
-	Model        string  `json:"messageModel"`
-	FromWhere    string  `json:"consumeFromWhere"`
-	Subscription []*Data `json:"subscriptionDataSet"`
-	UnitMode     bool    `json:"unitMode"`
-}
-
-// Data subscription information
-type Data struct {
-	Topic   string   `json:"topic"`
-	Expr    string   `json:"subString"`
-	Typ     string   `json:"expressionType"`
-	Tags    []string `json:"tagsSet"`
-	Codes   []uint32 `json:"codeSet"`
-	Version int64    `json:"subVersion"`
+	Group        string           `json:"groupName"`
+	Type         string           `json:"consumeType"`
+	Model        string           `json:"messageModel"`
+	FromWhere    string           `json:"consumeFromWhere"`
+	Subscription []*SubscribeData `json:"subscriptionDataSet"`
+	UnitMode     bool             `json:"unitMode"`
 }
 
 func (c *Consumer) String() string {

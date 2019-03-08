@@ -24,7 +24,7 @@ func TestData(t *testing.T) {
 	assert.True(t, !sq.Equal(&sq1))
 
 	sq = sq1
-	sq1.Typ = "type"
+	sq1.Type = "type"
 	assert.True(t, !sq.Equal(&sq1))
 
 	sq = sq1

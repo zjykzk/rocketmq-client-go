@@ -40,7 +40,7 @@ type consumeConcurrentlyRequest struct {
 }
 
 type consumeConcurrentlyService struct {
-	*consumeService
+	*baseConsumeService
 
 	cleanExpiredInterval time.Duration
 
@@ -102,7 +102,7 @@ func newConsumeConcurrentlyService(conf concurrentlyServiceConfig) (
 	}
 
 	pc := &consumeConcurrentlyService{
-		consumeService:       c,
+		baseConsumeService:   c,
 		consumer:             conf.consumer,
 		concurrentCount:      conf.concurrentCount,
 		consumeQueue:         make(chan *consumeConcurrentlyRequest, conf.concurrentCount*3/2),
@@ -113,13 +113,13 @@ func newConsumeConcurrentlyService(conf concurrentlyServiceConfig) (
 		consumeLaterInterval: time.Second,
 	}
 
-	pc.consumeService.oldMessageQueueRemover = pc.removeOldMessageQueue
+	pc.baseConsumeService.oldMessageQueueRemover = pc.dropAndRemoveProcessQueue
 
 	return pc, nil
 }
 
 func (cs *consumeConcurrentlyService) start() {
-	cs.consumeService.start()
+	cs.baseConsumeService.start()
 	cs.startFunc(cs.clearExpiredMessage, cs.cleanExpiredInterval)
 	cs.startConsume()
 }

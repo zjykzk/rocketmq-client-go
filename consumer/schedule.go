@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+type taskScheduler interface {
+	scheduleFuncAfter(f func(), delay time.Duration) error
+}
+
 type runnable interface {
 	run()
 }

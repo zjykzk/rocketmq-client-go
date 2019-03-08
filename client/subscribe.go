@@ -63,12 +63,14 @@ func (t *SubscribeQueueTable) Delete(topic string) []*message.Queue {
 
 // SubscribeData subscription information
 type SubscribeData struct {
-	Topic   string   `json:"topic"`
-	Expr    string   `json:"subString"`
-	Typ     string   `json:"expressionType"`
-	Tags    []string `json:"tagsSet"`
-	Codes   []uint32 `json:"codeSet"`
-	Version int64    `json:"subVersion"`
+	Topic             string   `json:"topic"`
+	Expr              string   `json:"subString"`
+	Type              string   `json:"expressionType"`
+	Tags              []string `json:"tagsSet"`
+	Codes             []uint32 `json:"codeSet"`
+	Version           int64    `json:"subVersion"`
+	IsClassFilterMode bool     `json:"classFilterMode"`
+	FilterClassSource string   `json:"-"`
 }
 
 // Equal returns true if equals another, otherwise false
@@ -85,7 +87,7 @@ func (s *SubscribeData) Equal(o *SubscribeData) bool {
 		return false
 	}
 
-	if s.Typ != o.Typ {
+	if s.Type != o.Type {
 		return false
 	}
 
@@ -109,12 +111,22 @@ func (s *SubscribeData) Equal(o *SubscribeData) bool {
 		}
 	}
 
+	if s.FilterClassSource != o.FilterClassSource {
+		return false
+	}
+
+	if s.IsClassFilterMode != s.IsClassFilterMode {
+		return false
+	}
+
 	return true
 }
 
 func (s *SubscribeData) String() string {
-	return fmt.Sprintf("SubscribeData [topic=%s,expr=%s,type=%s,tags=%v,codes=%v,version=%d]",
-		s.Topic, s.Expr, s.Typ, s.Tags, s.Codes, s.Version)
+	return fmt.Sprintf(
+		"SubscribeData [topic=%s,expr=%s,type=%s,tags=%v,codes=%v,version=%d,isclass=%t,classsource=%s]",
+		s.Topic, s.Expr, s.Type, s.Tags, s.Codes, s.Version, s.IsClassFilterMode, s.FilterClassSource,
+	)
 }
 
 // SubscribeDataTable contains the subscription information of topic, the operations is thread-safe
