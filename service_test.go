@@ -9,11 +9,12 @@ import (
 
 func TestServer(t *testing.T) {
 	runShutdown := false
+	shutdownFunc := func() { runShutdown = true }
 	// bad state
 	s := &Server{
-		State:        StateStopped,
-		StartFunc:    func() error { return nil },
-		ShutdownFunc: func() { runShutdown = true },
+		State:      StateStopped,
+		StartFunc:  func() error { return nil },
+		Shutdowner: &ShutdownCollection{shutdowns: []Shutdowner{ShutdownFunc(shutdownFunc)}},
 	}
 	assert.NotNil(t, s.Start())
 	s.Shutdown()
@@ -32,4 +33,12 @@ func TestServer(t *testing.T) {
 	assert.NotNil(t, s.Start())
 	s.Shutdown()
 	assert.False(t, runShutdown)
+}
+
+func TestShutdownFuncCollection(t *testing.T) {
+	fs := &ShutdownCollection{}
+	count := 0
+	fs.AddFuncs(func() { count++ }, func() { count += 2 })
+	fs.Shutdown()
+	assert.Equal(t, 3, count)
 }

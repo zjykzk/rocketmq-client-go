@@ -47,11 +47,48 @@ const (
 	StateStartFailed
 )
 
+// Shutdowner shutdown interface
+type Shutdowner interface {
+	Shutdown()
+}
+
+// ShutdownFunc shutdown func
+type ShutdownFunc func()
+
+// Shutdown call shutdown func
+func (f ShutdownFunc) Shutdown() {
+	f()
+}
+
+// ShutdownCollection shutdowner collection
+type ShutdownCollection struct {
+	shutdowns []Shutdowner
+}
+
+// AddFuncs add shutdown funcs
+func (c *ShutdownCollection) AddFuncs(fs ...func()) {
+	for _, f := range fs {
+		c.shutdowns = append(c.shutdowns, ShutdownFunc(f))
+	}
+}
+
+// Add add shutdowners
+func (c *ShutdownCollection) Add(s ...Shutdowner) {
+	c.shutdowns = append(c.shutdowns, s...)
+}
+
+// Shutdown call all the added shutdown func, in the added order
+func (c *ShutdownCollection) Shutdown() {
+	for _, shutdown := range c.shutdowns {
+		shutdown.Shutdown()
+	}
+}
+
 // Server server with start&shutdown operation
 type Server struct {
-	State        State
-	StartFunc    func() error
-	ShutdownFunc func()
+	State      State
+	StartFunc  func() error
+	Shutdowner Shutdowner
 }
 
 // Start starts server
@@ -59,10 +96,6 @@ type Server struct {
 func (s *Server) Start() error {
 	if s.StartFunc == nil {
 		return errors.New("empty start func")
-	}
-
-	if s.ShutdownFunc == nil {
-		return errors.New("empty shutdown func")
 	}
 
 	if !s.State.Set(StateCreating, StateStartFailed) {
@@ -90,5 +123,7 @@ func (s *Server) Shutdown() {
 	if !s.State.Set(StateRunning, StateStopped) {
 		return
 	}
-	s.ShutdownFunc()
+	if s.Shutdowner != nil {
+		s.Shutdowner.Shutdown()
+	}
 }

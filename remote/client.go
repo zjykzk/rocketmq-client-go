@@ -293,7 +293,7 @@ func (c *client) removeFuturesOnError(futures []*responseFuture, err error) {
 
 // Shutdown client's work
 func (c *client) Shutdown() {
-	c.logger.Info("shutdown remote client")
+	c.logger.Info("shutdown remote client START")
 	close(c.exitChan)
 	for _, ch := range c.channels {
 		ch.close()

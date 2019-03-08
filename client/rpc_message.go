@@ -44,7 +44,7 @@ func (h queryMessageByIDHeader) ToMap() map[string]string {
 func (c *MQClient) QueryMessageByOffset(addr string, offset int64, to time.Duration) (
 	*message.Ext, error,
 ) {
-	return rpc.QueryMessageByOffset(c.Client, addr, offset, to)
+	return rpc.ViewMessageByOffset(c.Client, addr, offset, to)
 }
 
 // SendBack send back the message
@@ -81,7 +81,7 @@ func (c *MQClient) SearchOffsetByTimestamp(
 ) (
 	int64, *rpc.Error,
 ) {
-	return rpc.QueryOffsetByTimestamp(c.Client, addr, topic, queueID, timestamp, to)
+	return rpc.SearchOffsetByTimestamp(c.Client, addr, topic, queueID, timestamp, to)
 }
 
 // RegisterFilter register the filter to the broker
@@ -101,4 +101,11 @@ func (c *MQClient) RegisterFilter(group string, subData *SubscribeData) error {
 	return rpc.RegisterFilter(
 		c.Client, broker.SelectAddress(), group, c.clientID, (*rpc.SubscribeData)(subData), time.Second*3,
 	)
+}
+
+// PullMessageAsync pull message async
+func (c *MQClient) PullMessageAsync(
+	addr string, header *rpc.PullHeader, to time.Duration, callback func(*rpc.PullResponse, error),
+) error {
+	return rpc.PullMessageAsync(c.Client, addr, header, to, callback)
 }

@@ -14,12 +14,18 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/remote"
 )
 
+const (
+	defaultBrokerSuspendMaxTime = 2 * time.Second
+	defaultTimeoutWhenSuspend   = 30 * time.Second
+	defaultPullTimeout          = 10 * time.Second
+)
+
 // PullConsumer consumes the messages using pulling method
 type PullConsumer struct {
 	*consumer
-	BrokerSuspendMaxTime       time.Duration
-	ConsumerTimeoutWhenSuspend time.Duration
-	ConsumerPullTimeout        time.Duration
+	brokerSuspendMaxTime time.Duration
+	timeoutWhenSuspend   time.Duration
+	pullTimeout          time.Duration
 
 	registerTopics   []string
 	currentMessageQs []*message.Queue
@@ -35,15 +41,15 @@ func NewPullConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 			brokerSuggester: &brokerSuggester{table: make(map[string]int32, 32)},
 		},
 	}
-	c.StartFunc, c.ShutdownFunc = c.start, c.shutdown
+	c.StartFunc = c.start
 	c.GroupName = group
 	c.NameServerAddrs = namesrvAddrs
 	c.FromWhere = consumeFromLastOffset
 	c.MessageModel = Clustering
 	c.Typ = Pull
-	c.BrokerSuspendMaxTime = 20 * time.Second
-	c.ConsumerTimeoutWhenSuspend = 30 * time.Second
-	c.ConsumerPullTimeout = 10 * time.Second
+	c.brokerSuspendMaxTime = defaultBrokerSuspendMaxTime
+	c.timeoutWhenSuspend = defaultTimeoutWhenSuspend
+	c.pullTimeout = defaultPullTimeout
 	c.assigner = &Averagely{}
 	c.reblancer = c
 	c.runnerInfo = c.RunningInfo
@@ -71,7 +77,7 @@ func (c *PullConsumer) start() error {
 }
 
 func (c *PullConsumer) checkConfig() error {
-	if c.ConsumerTimeoutWhenSuspend < c.BrokerSuspendMaxTime {
+	if c.timeoutWhenSuspend < c.brokerSuspendMaxTime {
 		return errors.New("ConsumerTimeoutWhenSuspend when suspend is less than BrokerSuspendMaxTime")
 	}
 	return nil
@@ -177,12 +183,12 @@ func (c *PullConsumer) pullSync(
 			MaxCount:             int32(maxCount),
 			SysFlag:              buildPullFlag(false, block, true),
 			CommitOffset:         0,
-			SuspendTimeoutMillis: int64(c.BrokerSuspendMaxTime / time.Millisecond),
+			SuspendTimeoutMillis: int64(c.brokerSuspendMaxTime / time.Millisecond),
 			Subscription:         expr,
 			SubVersion:           0,
 			ExpressionType:       ExprTypeTag,
 		},
-		c.ConsumerPullTimeout)
+		c.pullTimeout)
 	if err != nil {
 		c.logger.Errorf("pull message sync error:%s", err)
 		return nil, err
@@ -255,9 +261,9 @@ func (c *PullConsumer) RunningInfo() client.RunningInfo {
 	millis := time.Millisecond
 	prop := map[string]string{
 		"consumerGroup":                    c.GroupName,
-		"brokerSuspendMaxTimeMillis":       dToMsStr(c.BrokerSuspendMaxTime),
-		"consumerTimeoutMillisWhenSuspend": dToMsStr(c.ConsumerTimeoutWhenSuspend),
-		"consumerPullTimeoutMillis":        dToMsStr(c.ConsumerPullTimeout),
+		"brokerSuspendMaxTimeMillis":       dToMsStr(c.brokerSuspendMaxTime),
+		"consumerTimeoutMillisWhenSuspend": dToMsStr(c.timeoutWhenSuspend),
+		"consumerPullTimeoutMillis":        dToMsStr(c.pullTimeout),
 		"messageModel":                     c.MessageModel.String(),
 		"registerTopics":                   strings.Join(c.subscribeData.Topics(), ", "),
 		"unitMode":                         strconv.FormatBool(c.IsUnitMode),

@@ -10,9 +10,6 @@ import (
 )
 
 type mqClient interface {
-	Start() error
-	Shutdown()
-
 	RegisterAdmin(a client.Admin) error
 	UnregisterAdmin(group string)
 	AdminCount() int

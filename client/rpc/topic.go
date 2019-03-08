@@ -37,7 +37,7 @@ func (h *CreateOrUpdateTopicHeader) ToMap() map[string]string {
 func CreateOrUpdateTopic(client remote.Client, addr string, header *CreateOrUpdateTopicHeader, to time.Duration) (
 	err error,
 ) {
-	cmd, err := client.RequestSync(addr, remote.NewCommand(UpdateAndCreateTopic, header), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(updateAndCreateTopic, header), to)
 	if err != nil {
 		return requestError(err)
 	}
@@ -57,7 +57,7 @@ func (h deleteTopicHeader) ToMap() map[string]string {
 // DeleteTopicInBroker delete topic in the broker
 func DeleteTopicInBroker(client remote.Client, addr, topic string, to time.Duration) (err error) {
 	h := deleteTopicHeader(topic)
-	cmd, err := client.RequestSync(addr, remote.NewCommand(DeleteTopicInBrokerCode, h), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(deleteTopicInBroker, h), to)
 	if err != nil {
 		return requestError(err)
 	}

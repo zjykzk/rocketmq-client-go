@@ -1,8 +1,6 @@
 package admin
 
 import (
-	"errors"
-	"fmt"
 	"math/rand"
 	"os"
 	"strconv"
@@ -18,13 +16,12 @@ import (
 
 // Admin admin operations
 type Admin struct {
+	rocketmq.Server
 	rocketmq.Client
-	state    rocketmq.State
-	exitChan chan int
 
 	client mqClient
 
-	Logger log.Logger
+	logger log.Logger
 }
 
 // NewAdmin create admin operator
@@ -38,73 +35,71 @@ func NewAdmin(namesrvAddrs []string, logger log.Logger) *Admin {
 			GroupName:                     "admin_ext_group",
 		},
 	}
-	a.Logger = logger
+	a.StartFunc = a.start
+	a.logger = logger
 	return a
 }
 
 // Start admin work
-func (a *Admin) Start() (err error) {
-	a.Logger.Info("start admin")
-	switch a.state {
-	case rocketmq.StateRunning:
-		a.Logger.Warn("admin is running")
-		return errors.New("bad status:running")
-	case rocketmq.StateStopped:
-		a.Logger.Errorf("admin is stoped")
-		return errors.New("bad status:stoped")
-	case rocketmq.StateStartFailed:
-		a.Logger.Errorf("admin start failed")
-		return errors.New("bad status:start failed")
-	case rocketmq.StateCreating:
-	default:
-		panic("BUG:unknow state:" + strconv.Itoa(int(a.state)))
-	}
-
-	a.state = rocketmq.StateStartFailed
+func (a *Admin) start() (err error) {
 	a.InstanceName = strconv.Itoa(os.Getpid())
 	a.ClientIP, err = rocketmq.GetIPStr()
 	if err != nil {
-		a.Logger.Errorf("no ip")
+		a.logger.Errorf("no ip")
 		return
 	}
+	mqClient, err := a.buildMQClient()
+	if err != nil {
+		return
+	}
+	a.client = mqClient
+
+	err = a.client.RegisterAdmin(a)
+	if err != nil {
+		a.logger.Errorf("register producer error:%s", err.Error())
+		return
+	}
+
+	err = mqClient.Start()
+	if err != nil {
+		a.logger.Errorf("start mq client error:%s", err)
+		return
+	}
+	a.buildShutdowner(mqClient.Shutdown)
+
+	return
+}
+
+func (a *Admin) buildMQClient() (*client.MQClient, error) {
 	a.ClientID = client.BuildMQClientID(a.ClientIP, a.UnitName, a.InstanceName)
-	a.client, err = client.New(
+	client, err := client.New(
 		&client.Config{
 			HeartbeatBrokerInterval: a.HeartbeatBrokerInterval,
 			PollNameServerInterval:  a.PollNameServerInterval,
 			NameServerAddrs:         a.NameServerAddrs,
-		}, a.ClientID, a.Logger)
-	if err != nil {
-		return
-	}
-
-	err = a.client.RegisterAdmin(a)
-	if err != nil {
-		a.state = rocketmq.StateCreating
-		a.Logger.Errorf("register producer error:%s", err.Error())
-		return
-	}
-
-	err = a.client.Start()
-	if err == nil {
-		a.state = rocketmq.StateRunning
-	}
-	return
+		}, a.ClientID, a.logger,
+	)
+	a.client = client
+	return client, err
 }
 
-// Shutdown admin work
-func (a *Admin) Shutdown() error {
-	a.Logger.Info("shutdown admin:" + a.GroupName)
-	switch a.state {
-	case rocketmq.StateRunning:
-		a.client.UnregisterAdmin(a.GroupName)
-		a.client.Shutdown()
-		a.state = rocketmq.StateStopped
-		return nil
-	default:
-		a.Logger.Warnf("shutdown admin under state:%s", a.state.String())
-		return fmt.Errorf("shutdown admin at bad state:%d", a.state)
-	}
+func (a *Admin) buildShutdowner(f func()) {
+	shutdowner := &rocketmq.ShutdownCollection{}
+	shutdowner.AddFuncs(
+		func() {
+			a.logger.Infof("shutdown admin:%s START", a.GroupName)
+		},
+		a.shutdown, f,
+		func() {
+			a.logger.Infof("shutdown admin:%s END", a.GroupName)
+		},
+	)
+
+	a.Shutdowner = shutdowner
+}
+
+func (a *Admin) shutdown() {
+	a.client.UnregisterAdmin(a.GroupName)
 }
 
 // Group returns the GroupName of the producer
@@ -139,11 +134,11 @@ func (a *Admin) CreateOrUpdateTopic(addr, topic string, perm, queueCount int32) 
 func (a *Admin) DeleteTopicInBroker(addr, topic string) (err error) {
 	err = a.client.DeleteTopicInBroker(addr, topic, 3*time.Second)
 	if err != nil {
-		a.Logger.Errorf("delete topic %s in broker:%s error:%s", topic, addr, err)
+		a.logger.Errorf("delete topic %s in broker:%s error:%s", topic, addr, err)
 		return
 	}
 
-	a.Logger.Debugf("DELETE topic %s suc at broker %s", topic, addr)
+	a.logger.Debugf("DELETE topic %s suc at broker %s", topic, addr)
 	return
 }
 
@@ -152,10 +147,10 @@ func (a *Admin) DeleteTopicInAllNamesrv(topic string) (err error) {
 	for _, addr := range a.NameServerAddrs {
 		err = a.client.DeleteTopicInNamesrv(addr, topic, 3*time.Second)
 		if err != nil {
-			a.Logger.Errorf("delete topic %s in namesrv:%s error:%s", topic, addr, err)
+			a.logger.Errorf("delete topic %s in namesrv:%s error:%s", topic, addr, err)
 			continue
 		}
-		a.Logger.Debugf("DELETE topic %s suc at namesrv %s", topic, addr)
+		a.logger.Debugf("DELETE topic %s suc at namesrv %s", topic, addr)
 	}
 	return
 }
@@ -170,7 +165,7 @@ func (a *Admin) GetBrokerClusterInfo() (info *route.ClusterInfo, err error) {
 			return
 		}
 
-		a.Logger.Errorf("request broker cluster info from %s, error:%s", addr, err)
+		a.logger.Errorf("request broker cluster info from %s, error:%s", addr, err)
 	}
 	return
 }

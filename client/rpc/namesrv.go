@@ -12,7 +12,7 @@ import (
 // DeleteTopicInNamesrv delete topic in the broker
 func DeleteTopicInNamesrv(client remote.Client, addr, topic string, to time.Duration) (err error) {
 	h := deleteTopicHeader(topic)
-	cmd, err := client.RequestSync(addr, remote.NewCommand(DeleteTopicInNamesrvCode, h), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(deleteTopicInNamesrv, h), to)
 	if err != nil {
 		return requestError(err)
 	}
@@ -25,7 +25,7 @@ func DeleteTopicInNamesrv(client remote.Client, addr, topic string, to time.Dura
 
 // GetBrokerClusterInfo get the cluster info from the namesrv
 func GetBrokerClusterInfo(client remote.Client, addr string, to time.Duration) (*route.ClusterInfo, error) {
-	cmd, err := client.RequestSync(addr, remote.NewCommand(GetBrokerClusterInfoCode, nil), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(getBrokerClusterInfo, nil), to)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func GetTopicRouteInfo(client remote.Client, addr string, topic string, to time.
 	router *route.TopicRouter, err *Error,
 ) {
 	h := getTopicRouteInfoHeader(topic)
-	cmd, e := client.RequestSync(addr, remote.NewCommand(GetRouteintoByTopic, h), to)
+	cmd, e := client.RequestSync(addr, remote.NewCommand(getRouteintoByTopic, h), to)
 	if e != nil {
 		return nil, requestError(e)
 	}

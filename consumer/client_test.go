@@ -26,8 +26,6 @@ type fakeMQClient struct {
 	clientIDs         []string
 }
 
-func (c *fakeMQClient) Start() error                              { return nil }
-func (c *fakeMQClient) Shutdown()                                 {}
 func (c *fakeMQClient) RegisterConsumer(co client.Consumer) error { return nil }
 func (c *fakeMQClient) UnregisterConsumer(group string)           {}
 func (c *fakeMQClient) SendHeartbeat()                            {}
@@ -86,6 +84,9 @@ func (c *fakeMQClient) PullMessageSync(
 		pr.Code = rpc.PullOffsetMoved
 	}
 	return pr, nil
+}
+func (c *fakeMQClient) PullMessageAsync(addr string, header *rpc.PullHeader, to time.Duration, callback func(*rpc.PullResponse, error)) error {
+	return nil
 }
 func (c *fakeMQClient) SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) error {
 	c.sendBackAddr = addr

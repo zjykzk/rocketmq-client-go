@@ -58,7 +58,8 @@ type Producer struct {
 	client            mqClient
 	mqFaultStrategy   *MQFaultStrategy
 
-	logger log.Logger
+	shutdowns []func()
+	logger    log.Logger
 }
 
 // New creates procuder
@@ -69,7 +70,7 @@ func New(group string, namesrvAddrs []string, logger log.Logger) *Producer {
 		Server:            rocketmq.Server{State: rocketmq.StateCreating},
 		topicPublishInfos: &topicPublishInfoTable{table: make(map[string]*topicPublishInfo)},
 	}
-	p.StartFunc, p.ShutdownFunc = p.start, p.shutdown
+	p.StartFunc = p.start
 	p.GroupName = group
 	p.NameServerAddrs = namesrvAddrs
 	return p
@@ -86,26 +87,40 @@ func (p *Producer) start() (err error) {
 		return
 	}
 
-	p.ClientID = client.BuildMQClientID(p.ClientIP, p.UnitName, p.InstanceName)
-	p.client, err = client.New(
-		&client.Config{
-			HeartbeatBrokerInterval: p.HeartbeatBrokerInterval,
-			PollNameServerInterval:  p.PollNameServerInterval,
-			NameServerAddrs:         p.NameServerAddrs,
-		}, p.ClientID, p.logger)
+	mqClient, err := p.buildMQClient()
 	if err != nil {
 		return
 	}
 
-	err = p.client.RegisterProducer(p)
+	err = mqClient.RegisterProducer(p)
 	if err != nil {
 		p.logger.Errorf("register producer error:%s", err.Error())
 		return
 	}
 
-	err = p.client.Start()
+	err = mqClient.Start()
+	if err != nil {
+		p.logger.Errorf("start mq client error:%s", err)
+		return
+	}
+
+	p.buildShutdowner(mqClient.Shutdown)
+
 	p.mqFaultStrategy = NewMQFaultStrategy(true)
 	return
+}
+
+func (p *Producer) buildMQClient() (*client.MQClient, error) {
+	p.ClientID = client.BuildMQClientID(p.ClientIP, p.UnitName, p.InstanceName)
+	client, err := client.New(
+		&client.Config{
+			HeartbeatBrokerInterval: p.HeartbeatBrokerInterval,
+			PollNameServerInterval:  p.PollNameServerInterval,
+			NameServerAddrs:         p.NameServerAddrs,
+		}, p.ClientID, p.logger,
+	)
+	p.client = client
+	return client, err
 }
 
 func (p *Producer) updateInstanceName() {
@@ -114,12 +129,23 @@ func (p *Producer) updateInstanceName() {
 	}
 }
 
+func (p *Producer) buildShutdowner(f func()) {
+	shutdowner := &rocketmq.ShutdownCollection{}
+	shutdowner.AddFuncs(
+		func() {
+			p.logger.Infof("shutdown producer:%s %s START", p.GroupName, p.ClientID)
+		},
+		p.shutdown, f,
+		func() {
+			p.logger.Infof("shutdown producer:%s %s END", p.GroupName, p.ClientID)
+		},
+	)
+	p.Shutdowner = shutdowner
+}
+
 // Shutdown shutdown the producer
 func (p *Producer) shutdown() {
-	p.logger.Info("shutdown producer:" + p.GroupName)
 	p.client.UnregisterProducer(p.GroupName)
-	p.client.Shutdown()
-	p.logger.Infof("shutdown producer:%s END", p.GroupName)
 }
 
 // Group returns the GroupName of the producer

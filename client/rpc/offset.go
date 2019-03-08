@@ -32,7 +32,7 @@ func QueryConsumerOffset(
 		topic:   topic,
 		queueID: queueID,
 	}
-	cmd, err := client.RequestSync(addr, remote.NewCommand(QueryConsumerOffsetCode, h), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(queryConsumerOffset, h), to)
 	if err != nil {
 		return 0, requestError(err)
 	}
@@ -73,7 +73,7 @@ func UpdateConsumerOffset(
 		queueID: queueID,
 		offset:  offset,
 	}
-	_, err := client.RequestSync(addr, remote.NewCommand(UpdateConsumerOffsetCode, h), to)
+	_, err := client.RequestSync(addr, remote.NewCommand(updateConsumerOffset, h), to)
 	return err
 }
 
@@ -87,5 +87,5 @@ func UpdateConsumerOffsetOneway(
 		queueID: queueID,
 		offset:  offset,
 	}
-	return client.RequestOneway(addr, remote.NewCommand(UpdateConsumerOffsetCode, h))
+	return client.RequestOneway(addr, remote.NewCommand(updateConsumerOffset, h))
 }

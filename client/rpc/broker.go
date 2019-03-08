@@ -12,7 +12,7 @@ import (
 func BrokerRuntimeInfo(client remote.Client, addr string, timeout time.Duration) (
 	map[string]string, error,
 ) {
-	cmd, err := client.RequestSync(addr, remote.NewCommand(GetBrokerRuntimeInfo, nil), timeout)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(getBrokerRuntimeInfo, nil), timeout)
 
 	if err != nil {
 		return nil, requestError(err)
@@ -66,7 +66,7 @@ func UnregisterClient(
 		producerGroup: pGroup,
 		consumerGroup: cGroup,
 	}
-	cmd, err := client.RequestSync(addr, remote.NewCommand(UnregisterClientCode, h), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(unregisterClient, h), to)
 	if err != nil {
 		return remote.RequestError(err)
 	}
@@ -136,7 +136,7 @@ func SendHeartbeat(client remote.Client, addr string, heartbeat *HeartbeatReques
 		return
 	}
 
-	cmd, err := client.RequestSync(addr, remote.NewCommandWithBody(HeartBeat, nil, data), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommandWithBody(heartBeat, nil, data), to)
 	if err != nil {
 		return
 	}

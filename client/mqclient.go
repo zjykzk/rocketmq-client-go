@@ -219,7 +219,7 @@ func (c *MQClient) Start() error {
 
 // Shutdown client
 func (c *MQClient) Shutdown() {
-	c.logger.Infof("shutdown mqclient, state %s", c.state.String())
+	c.logger.Infof("shutdown mqclient, state %s START", c.state.String())
 	if c.producers.size() > 0 { // NOTE here is different from ROCKETMQ JAVA SDK, since the DefaultMQProducer is not stored here
 		c.logger.Info("producer not empty ignore")
 		return

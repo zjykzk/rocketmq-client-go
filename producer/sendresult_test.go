@@ -17,6 +17,6 @@ func TestSendResult(t *testing.T) {
 		}
 		assert.True(t, false)
 	}()
-	SendStatus(len(sendStatusDescs)).String()
+	t.Log(SendStatus(len(sendStatusDescs)).String())
 	assert.True(t, false)
 }

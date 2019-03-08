@@ -18,7 +18,7 @@ func GetConsumerIDs(client remote.Client, addr, group string, to time.Duration) 
 	ids []string, err error,
 ) {
 	g := getConsumerIDsHeader(group)
-	cmd, err := client.RequestSync(addr, remote.NewCommand(GetConsumerListByGroup, g), to)
+	cmd, err := client.RequestSync(addr, remote.NewCommand(getConsumerListByGroup, g), to)
 	if err != nil {
 		return
 	}

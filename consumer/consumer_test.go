@@ -99,7 +99,7 @@ func TestStart(t *testing.T) {
 		Config:   defaultConfig,
 		assigner: &Averagely{},
 	}
-	c.StartFunc, c.ShutdownFunc = c.start, c.shutdown
+	c.StartFunc = c.start
 
 	c.NameServerAddrs = []string{"fake addr"}
 	c.GroupName = "test"

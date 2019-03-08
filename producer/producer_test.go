@@ -3,46 +3,15 @@ package producer
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/zjykzk/rocketmq-client-go"
-	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
 	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
-
-type fakeMQClient struct {
-	sendMessageSyncErr error
-	sendResponse       rpc.SendResponse
-}
-
-func (f *fakeMQClient) Start() error {
-	return nil
-}
-func (f *fakeMQClient) Shutdown() {
-
-}
-func (f *fakeMQClient) RegisterProducer(p client.Producer) error {
-	return nil
-}
-func (f *fakeMQClient) UnregisterProducer(group string) {
-
-}
-func (f *fakeMQClient) SendMessageSync(
-	broker string, body []byte, h *rpc.SendHeader, timeout time.Duration,
-) (
-	*rpc.SendResponse, error,
-) {
-	return &f.sendResponse, f.sendMessageSyncErr
-}
-
-func (f *fakeMQClient) UpdateTopicRouterInfoFromNamesrv(topic string) error {
-	return nil
-}
 
 func newTestProducer() *Producer {
 	p := New("sendHeader", []string{"abc"}, log.Std)

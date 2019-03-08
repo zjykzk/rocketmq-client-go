@@ -94,18 +94,18 @@ func newTestConcurrentConsumer() *PushConsumer {
 func TestNewPushConsumer(t *testing.T) {
 	pc := newPushConsumer("group", []string{}, log.Std)
 	assert.NotNil(t, pc)
-	assert.Equal(t, pc.MaxReconsumeTimes, defaultPushMaxReconsumeTimes)
-	assert.Equal(t, pc.LastestConsumeTimestamp, defaultLastestConsumeTimestamp)
-	assert.Equal(t, pc.ConsumeTimeout, defaultConsumeTimeout)
-	assert.Equal(t, pc.ThresholdCountOfQueue, defaultThresholdCountOfQueue)
-	assert.Equal(t, pc.ThresholdSizeOfQueue, defaultThresholdSizeOfQueue)
-	assert.Equal(t, pc.ThresholdCountOfTopic, defaultThresholdCountOfTopic)
-	assert.Equal(t, pc.ThresholdSizeOfTopic, defaultThresholdSizeOfTopic)
-	assert.Equal(t, pc.PullInterval, defaultPullInterval)
-	assert.Equal(t, pc.ConsumeBatchSize, defaultConsumeBatchSize)
-	assert.Equal(t, pc.PullBatchSize, defaultPullBatchSize)
-	assert.Equal(t, pc.PostSubscriptionWhenPull, defaultPostSubscriptionWhenPull)
-	assert.Equal(t, pc.ConsumeMessageBatchMaxSize, defaultConsumeMessageBatchMaxSize)
+	assert.Equal(t, pc.maxReconsumeTimes, defaultPushMaxReconsumeTimes)
+	assert.Equal(t, pc.lastestConsumeTimestamp, defaultLastestConsumeTimestamp)
+	assert.Equal(t, pc.consumeTimeout, defaultConsumeTimeout)
+	assert.Equal(t, pc.thresholdCountOfQueue, defaultThresholdCountOfQueue)
+	assert.Equal(t, pc.thresholdSizeOfQueue, defaultThresholdSizeOfQueue)
+	assert.Equal(t, pc.thresholdCountOfTopic, defaultThresholdCountOfTopic)
+	assert.Equal(t, pc.thresholdSizeOfTopic, defaultThresholdSizeOfTopic)
+	assert.Equal(t, pc.pullInterval, defaultPullInterval)
+	assert.Equal(t, pc.consumeBatchSize, defaultConsumeBatchSize)
+	assert.Equal(t, pc.pullBatchSize, defaultPullBatchSize)
+	assert.Equal(t, pc.postSubscriptionWhenPull, defaultPostSubscriptionWhenPull)
+	assert.Equal(t, pc.consumeMessageBatchMaxSize, defaultConsumeMessageBatchMaxSize)
 }
 
 func TestUpdateProcessTable(t *testing.T) {
@@ -181,23 +181,23 @@ func TestUpdateThresholdOfQueue(t *testing.T) {
 	consumerService.queues = []message.Queue{{}, {QueueID: 1}}
 
 	// divided by queues
-	pc.ThresholdSizeOfTopic, pc.ThresholdCountOfTopic = 10, 20
+	pc.thresholdSizeOfTopic, pc.thresholdCountOfTopic = 10, 20
 	pc.updateThresholdOfQueue()
-	assert.Equal(t, 5, pc.ThresholdSizeOfQueue)
-	assert.Equal(t, 10, pc.ThresholdCountOfQueue)
+	assert.Equal(t, 5, pc.thresholdSizeOfQueue)
+	assert.Equal(t, 10, pc.thresholdCountOfQueue)
 
 	// less than 1
-	pc.ThresholdSizeOfTopic, pc.ThresholdCountOfTopic = 1, 1
+	pc.thresholdSizeOfTopic, pc.thresholdCountOfTopic = 1, 1
 	pc.updateThresholdOfQueue()
-	assert.Equal(t, 1, pc.ThresholdSizeOfQueue)
-	assert.Equal(t, 1, pc.ThresholdCountOfQueue)
+	assert.Equal(t, 1, pc.thresholdSizeOfQueue)
+	assert.Equal(t, 1, pc.thresholdCountOfQueue)
 
 	// do nothing
-	pc.ThresholdSizeOfTopic, pc.ThresholdCountOfTopic = -1, -1
-	pc.ThresholdSizeOfQueue, pc.ThresholdCountOfQueue = 12, 34
+	pc.thresholdSizeOfTopic, pc.thresholdCountOfTopic = -1, -1
+	pc.thresholdSizeOfQueue, pc.thresholdCountOfQueue = 12, 34
 	pc.updateThresholdOfQueue()
-	assert.Equal(t, 12, pc.ThresholdSizeOfQueue)
-	assert.Equal(t, 34, pc.ThresholdCountOfQueue)
+	assert.Equal(t, 12, pc.thresholdSizeOfQueue)
+	assert.Equal(t, 34, pc.thresholdCountOfQueue)
 }
 
 func TestUpdateSubscribeVersion(t *testing.T) {
@@ -396,7 +396,7 @@ func TestPushPull(t *testing.T) {
 	pullService.runSubmitLater = false
 
 	// over count threshold
-	pq.msgCount = int32(pc.ThresholdCountOfQueue + 1)
+	pq.msgCount = int32(pc.thresholdCountOfQueue + 1)
 	pc.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenFlowControl, pullService.delay)
@@ -404,7 +404,7 @@ func TestPushPull(t *testing.T) {
 	pq.msgCount = 0
 
 	// over size threshold
-	pq.msgSize = int64(pc.ThresholdSizeOfQueue + 1)
+	pq.msgSize = int64(pc.thresholdSizeOfQueue + 1)
 	pc.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenFlowControl, pullService.delay)

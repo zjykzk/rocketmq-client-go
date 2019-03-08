@@ -111,23 +111,25 @@ func (c *consumer) start() (err error) {
 	c.subscribeData = client.NewSubcribeTable()
 	c.topicRouters = route.NewTopicRouterTable()
 
-	err = c.buildMQClient()
+	mqClient, err := c.buildMQClient()
 	if err != nil {
 		c.logger.Errorf("new MQ client error:%s", err)
 		return
 	}
 
-	err = c.client.RegisterConsumer(c)
+	err = mqClient.RegisterConsumer(c)
 	if err != nil {
 		c.logger.Errorf("register producer error:%s", err.Error())
 		return
 	}
 
-	err = c.client.Start()
+	err = mqClient.Start()
 	if err != nil {
 		c.logger.Errorf("start mq client error:%s", err)
 		return
 	}
+
+	c.buildShutdowner(mqClient.Shutdown)
 
 	err = c.initOffset()
 	if err != nil {
@@ -159,22 +161,37 @@ func (c *consumer) checkConfig() error {
 	return nil
 }
 
-func (c *consumer) buildMQClient() (err error) {
+func (c *consumer) buildMQClient() (*client.MQClient, error) {
 	c.ClientID = client.BuildMQClientID(c.ClientIP, c.UnitName, c.InstanceName)
-	c.client, err = client.New(
+	client, err := client.New(
 		&client.Config{
 			HeartbeatBrokerInterval: c.HeartbeatBrokerInterval,
 			PollNameServerInterval:  c.PollNameServerInterval,
 			NameServerAddrs:         c.NameServerAddrs,
 		}, c.ClientID, c.logger,
 	)
-	return
+	c.client = client
+	return client, err
 }
 
 func (c *consumer) updateInstanceName() {
 	if c.MessageModel == Clustering && c.InstanceName == defaultInstanceName {
 		c.InstanceName = strconv.Itoa(os.Getpid())
 	}
+}
+
+func (c *consumer) buildShutdowner(f func()) {
+	shutdowner := &rocketmq.ShutdownCollection{}
+	shutdowner.AddFuncs(
+		func() {
+			c.logger.Infof("shutdown consumer, group:%s, clientID:%s START", c.GroupName, c.ClientID)
+		},
+		c.shutdown, f,
+		func() {
+			c.logger.Infof("shutdown consumer, group:%s, clientID:%s END", c.GroupName, c.ClientID)
+		},
+	)
+	c.Shutdowner = shutdowner
 }
 
 func (c *consumer) scheduleTasks() {
@@ -184,13 +201,10 @@ func (c *consumer) scheduleTasks() {
 
 // Shutdown the works of consumer
 func (c *consumer) shutdown() {
-	c.logger.Infof("Shutdown consumer, group:%s, clientID:%s", c.GroupName, c.ClientID)
 	c.client.UnregisterConsumer(c.GroupName)
-	c.client.Shutdown()
 	c.offseter.persist()
 	close(c.exitChan)
 	c.Wait()
-	c.logger.Infof("Shutdown consumer, group:%s, clientID:%s OK", c.GroupName, c.ClientID)
 }
 
 func (c *consumer) initOffset() (err error) {

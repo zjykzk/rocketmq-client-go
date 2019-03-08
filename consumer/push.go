@@ -56,21 +56,21 @@ type pullRequestDispatcher interface {
 type PushConsumer struct {
 	*consumer
 
-	MaxReconsumeTimes       int
-	LastestConsumeTimestamp time.Time
-	ConsumeTimeout          time.Duration
+	maxReconsumeTimes       int
+	lastestConsumeTimestamp time.Time
+	consumeTimeout          time.Duration
 
-	ThresholdCountOfQueue int
-	ThresholdSizeOfQueue  int
-	ThresholdCountOfTopic int
-	ThresholdSizeOfTopic  int
+	thresholdCountOfQueue int
+	thresholdSizeOfQueue  int
+	thresholdCountOfTopic int
+	thresholdSizeOfTopic  int
 
-	PullInterval     time.Duration
-	PullBatchSize    int
-	ConsumeBatchSize int
+	pullInterval     time.Duration
+	pullBatchSize    int
+	consumeBatchSize int
 
-	PostSubscriptionWhenPull   bool
-	ConsumeMessageBatchMaxSize int
+	postSubscriptionWhenPull   bool
+	consumeMessageBatchMaxSize int
 
 	pause                 uint32
 	consumeService        consumerService
@@ -90,21 +90,21 @@ func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 			Server:          rocketmq.Server{State: rocketmq.StateCreating},
 			brokerSuggester: &brokerSuggester{table: make(map[string]int32, 32)},
 		},
-		MaxReconsumeTimes:       defaultPushMaxReconsumeTimes,
-		LastestConsumeTimestamp: defaultLastestConsumeTimestamp,
-		ConsumeTimeout:          defaultConsumeTimeout,
+		maxReconsumeTimes:       defaultPushMaxReconsumeTimes,
+		lastestConsumeTimestamp: defaultLastestConsumeTimestamp,
+		consumeTimeout:          defaultConsumeTimeout,
 
-		ThresholdCountOfQueue: defaultThresholdCountOfQueue,
-		ThresholdSizeOfQueue:  defaultThresholdSizeOfQueue,
-		ThresholdCountOfTopic: defaultThresholdCountOfTopic,
-		ThresholdSizeOfTopic:  defaultThresholdSizeOfTopic,
+		thresholdCountOfQueue: defaultThresholdCountOfQueue,
+		thresholdSizeOfQueue:  defaultThresholdSizeOfQueue,
+		thresholdCountOfTopic: defaultThresholdCountOfTopic,
+		thresholdSizeOfTopic:  defaultThresholdSizeOfTopic,
 
-		PullInterval:     defaultPullInterval,
-		ConsumeBatchSize: defaultConsumeBatchSize,
-		PullBatchSize:    defaultPullBatchSize,
+		pullInterval:     defaultPullInterval,
+		consumeBatchSize: defaultConsumeBatchSize,
+		pullBatchSize:    defaultPullBatchSize,
 
-		PostSubscriptionWhenPull:   defaultPostSubscriptionWhenPull,
-		ConsumeMessageBatchMaxSize: defaultConsumeMessageBatchMaxSize,
+		postSubscriptionWhenPull:   defaultPostSubscriptionWhenPull,
+		consumeMessageBatchMaxSize: defaultConsumeMessageBatchMaxSize,
 
 		subscription: make(map[string]string, 16),
 	}
@@ -117,7 +117,7 @@ func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 	pc.runnerInfo = pc.RunningInfo
 	pc.GroupName = group
 
-	pc.StartFunc, pc.ShutdownFunc = pc.start, pc.shutdown
+	pc.StartFunc = pc.start
 	return pc
 }
 
@@ -140,9 +140,9 @@ func NewConcurrentConsumer(
 				messageSendBack: pc,
 				offseter:        pc.offseter,
 			},
-			consumeTimeout: pc.ConsumeTimeout,
+			consumeTimeout: pc.consumeTimeout,
 			consumer:       userConsumer,
-			batchSize:      pc.ConsumeBatchSize,
+			batchSize:      pc.consumeBatchSize,
 		})
 	}
 	return
@@ -168,13 +168,16 @@ func (pc *PushConsumer) start() error {
 		return err
 	}
 
-	pc.pullService, err = newPullService(pullServiceConfig{
+	pullService, err := newPullService(pullServiceConfig{
 		messagePuller: pc,
 		logger:        pc.logger,
 	})
 	if err != nil {
 		return err
 	}
+	pc.pullService = pullService
+
+	pc.buildShutdowner(pullService.shutdown)
 
 	pc.updateTopicRouterInfoFromNamesrv()
 	pc.registerFilter()
@@ -189,37 +192,53 @@ func (pc *PushConsumer) checkConfig() error {
 		return errors.New("empty subcription")
 	}
 
-	if pc.ThresholdCountOfQueue < 1 || pc.ThresholdCountOfQueue > 65535 {
+	if pc.thresholdCountOfQueue < 1 || pc.thresholdCountOfQueue > 65535 {
 		return errors.New("ThresholdCountOfQueue out of the range [1, 65535]")
 	}
 
-	if pc.ThresholdSizeOfQueue < 1 || pc.ThresholdSizeOfQueue > 1024 {
+	if pc.thresholdSizeOfQueue < 1 || pc.thresholdSizeOfQueue > 1024 {
 		return errors.New("ThresholdSizeOfQueue out of the range [1, 1024]")
 	}
 
-	thresholdCountOfTopic := pc.ThresholdCountOfTopic
+	thresholdCountOfTopic := pc.thresholdCountOfTopic
 	if thresholdCountOfTopic != -1 && (thresholdCountOfTopic < 1 || thresholdCountOfTopic > 6553500) {
 		return errors.New("ThresholdCountOfTopic out of the range [1, 6553500]")
 	}
 
-	thresholdSizeOfTopic := pc.ThresholdSizeOfTopic
+	thresholdSizeOfTopic := pc.thresholdSizeOfTopic
 	if thresholdSizeOfTopic != -1 && (thresholdSizeOfTopic < 1 || thresholdSizeOfTopic > 102400) {
 		return errors.New("ThresholdSizeOfTopic out of the range [1, 102400]")
 	}
 
-	if pc.PullInterval < 0 || pc.PullInterval > 65535 {
+	if pc.pullInterval < 0 || pc.pullInterval > 65535 {
 		return errors.New("PullInterval out of the range [0, 65535]")
 	}
 
-	if pc.ConsumeBatchSize < 1 || pc.ConsumeBatchSize > 1024 {
+	if pc.consumeBatchSize < 1 || pc.consumeBatchSize > 1024 {
 		return errors.New("ConsumeBatchSize out of the range [1, 1024]")
 	}
 
-	if pc.PullBatchSize < 1 || pc.PullBatchSize > 1024 {
+	if pc.pullBatchSize < 1 || pc.pullBatchSize > 1024 {
 		return errors.New("PullBatchSize out of the range [1, 1024]")
 	}
 
 	return nil
+}
+
+func (pc *PushConsumer) buildShutdowner(f func()) {
+	shutdowner := &rocketmq.ShutdownCollection{}
+	shutdowner.Add(
+		rocketmq.ShutdownFunc(func() {
+			pc.logger.Infof("shutdown PUSH consumer, group:%s, clientID:%s START", pc.GroupName, pc.ClientID)
+		}),
+		rocketmq.ShutdownFunc(f),
+		pc.Shutdowner,
+		rocketmq.ShutdownFunc(func() {
+			pc.logger.Infof("shutdown PUSH consumer, group:%s, clientID:%s END", pc.GroupName, pc.ClientID)
+		}),
+	)
+
+	pc.Shutdowner = shutdowner
 }
 
 func (pc *PushConsumer) subscribe() {
@@ -243,13 +262,6 @@ func (pc *PushConsumer) registerFilter() {
 
 		pc.client.RegisterFilter(pc.GroupName, d)
 	}
-}
-
-func (pc *PushConsumer) shutdown() {
-	pc.logger.Info("shutdown push consumer ")
-	pc.consumer.shutdown()
-	pc.pullService.shutdown()
-	pc.logger.Info("shutdown push consumer OK")
 }
 
 // SendBack sends the message to the broker, the message will be consumed again after the at
@@ -420,7 +432,7 @@ func (pc *PushConsumer) searchOffset(mq *message.Queue) (int64, error) {
 	}
 
 	return pc.client.SearchOffsetByTimestamp(
-		addr, mq.Topic, mq.QueueID, pc.LastestConsumeTimestamp, time.Second*3,
+		addr, mq.Topic, mq.QueueID, pc.lastestConsumeTimestamp, time.Second*3,
 	)
 }
 
@@ -429,20 +441,20 @@ func (pc *PushConsumer) updateThresholdOfQueue() {
 	if queueCount <= 0 {
 		return
 	}
-	if pc.ThresholdCountOfTopic != -1 {
-		maxCountForQueue := pc.ThresholdCountOfTopic / queueCount
+	if pc.thresholdCountOfTopic != -1 {
+		maxCountForQueue := pc.thresholdCountOfTopic / queueCount
 		if maxCountForQueue < 1 {
 			maxCountForQueue = 1
 		}
-		pc.ThresholdCountOfQueue = maxCountForQueue
+		pc.thresholdCountOfQueue = maxCountForQueue
 	}
 
-	if pc.ThresholdSizeOfTopic != -1 {
-		maxSizeForQueue := pc.ThresholdSizeOfTopic / queueCount
+	if pc.thresholdSizeOfTopic != -1 {
+		maxSizeForQueue := pc.thresholdSizeOfTopic / queueCount
 		if maxSizeForQueue < 1 {
 			maxSizeForQueue = 1
 		}
-		pc.ThresholdSizeOfQueue = maxSizeForQueue
+		pc.thresholdSizeOfQueue = maxSizeForQueue
 	}
 }
 
@@ -485,24 +497,24 @@ func (pc *PushConsumer) pull(r *pullRequest) {
 }
 
 func (pc *PushConsumer) doesFlowControl(r *pullRequest) bool {
-	if pc.isCountFlowControl(r) {
+	if pc.doCountFlowControl(r) {
 		return true
 	}
 
-	if pc.isSizeFlowControl(r) {
+	if pc.doSizeFlowControl(r) {
 		return true
 	}
 
-	if pc.isConsumeServiceFlowControl(r) {
+	if pc.doConsumeServiceFlowControl(r) {
 		return true
 	}
 	return false
 }
 
-func (pc *PushConsumer) isCountFlowControl(r *pullRequest) bool {
+func (pc *PushConsumer) doCountFlowControl(r *pullRequest) bool {
 	pq := r.processQueue
 	cachedCount := pq.messageCount()
-	if cachedCount <= int32(pc.ThresholdCountOfQueue) {
+	if cachedCount <= int32(pc.thresholdCountOfQueue) {
 		return false
 	}
 
@@ -514,16 +526,16 @@ func (pc *PushConsumer) isCountFlowControl(r *pullRequest) bool {
 		pc.logger.Warnf(
 			"COUNT FLOW CONTROL:the cached message count exceeds the threshold %d,"+
 				"minOffset:%d,maxOffset:%d,count:%d, pull request:%s, flow controll total:%d",
-			pc.ThresholdCountOfQueue, min, max, cachedCount, r, pc.queueControlFlowTotal,
+			pc.thresholdCountOfQueue, min, max, cachedCount, r, pc.queueControlFlowTotal,
 		)
 	}
 	return true
 }
 
-func (pc *PushConsumer) isSizeFlowControl(r *pullRequest) bool {
+func (pc *PushConsumer) doSizeFlowControl(r *pullRequest) bool {
 	pq := r.processQueue
 	cachedSize := pq.messageSize()
-	if cachedSize <= int64(pc.ThresholdSizeOfQueue) {
+	if cachedSize <= int64(pc.thresholdSizeOfQueue) {
 		return false
 	}
 
@@ -533,13 +545,13 @@ func (pc *PushConsumer) isSizeFlowControl(r *pullRequest) bool {
 	if pc.queueControlFlowTotal%1000 == 0 {
 		pc.logger.Warnf(
 			"SIZE FLOW CONTROL:the cached message size exceeds the threshold %d,size:%dM, pull request:%s, flow controll total:%d",
-			pc.ThresholdSizeOfQueue, cachedSize>>20, r, pc.queueControlFlowTotal,
+			pc.thresholdSizeOfQueue, cachedSize>>20, r, pc.queueControlFlowTotal,
 		)
 	}
 	return true
 }
 
-func (pc *PushConsumer) isConsumeServiceFlowControl(r *pullRequest) bool {
+func (pc *PushConsumer) doConsumeServiceFlowControl(r *pullRequest) bool {
 	pq := r.processQueue
 	if !pc.consumeService.flowControl(pq) {
 		return false

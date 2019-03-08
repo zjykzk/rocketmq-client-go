@@ -8,9 +8,6 @@ import (
 )
 
 type mqClient interface {
-	Start() error
-	Shutdown()
-
 	RegisterConsumer(co client.Consumer) error
 	UnregisterConsumer(group string)
 
@@ -19,6 +16,7 @@ type mqClient interface {
 
 	GetConsumerIDs(addr, group string, to time.Duration) ([]string, error)
 	PullMessageSync(addr string, header *rpc.PullHeader, to time.Duration) (*rpc.PullResponse, error)
+	PullMessageAsync(addr string, header *rpc.PullHeader, to time.Duration, callback func(*rpc.PullResponse, error)) error
 	SendBack(addr string, h *rpc.SendBackHeader, to time.Duration) error
 	UpdateConsumerOffset(addr, topic, group string, queueID int, offset int64, to time.Duration) error
 	UpdateConsumerOffsetOneway(addr, topic, group string, queueID int, offset int64) error
