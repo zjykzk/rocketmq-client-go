@@ -18,7 +18,10 @@ type fakeConsumerService struct {
 	runDropAndRemoveProcessQueue bool
 }
 
-func (m *fakeConsumerService) messageQueues() []message.Queue {
+func (m *fakeConsumerService) start()    {}
+func (m *fakeConsumerService) shutdown() {}
+
+func (m *fakeConsumerService) messageQueues(topic string) []message.Queue {
 	return m.queues
 }
 

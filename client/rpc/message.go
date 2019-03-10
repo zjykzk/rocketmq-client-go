@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -378,6 +379,13 @@ type SubscribeData struct {
 	Version           int64    `json:"subVersion"`
 	IsClassFilterMode bool     `json:"classFilterMode"`
 	FilterClassSource string   `json:"-"`
+}
+
+func (sd *SubscribeData) String() string {
+	return fmt.Sprintf(
+		"SubscribeData:[topic=%s,subString=%s,expressType=%s,tagsSet=%s,version=%d]",
+		sd.Topic, sd.Expr, sd.Type, sd.Tags, sd.Version,
+	)
 }
 
 // RegisterFilter register the filter to the broker

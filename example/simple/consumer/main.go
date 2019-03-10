@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/zjykzk/rocketmq-client-go/log"
 )
@@ -48,5 +50,17 @@ func newLogger(filename string) (log.Logger, error) {
 		return nil, err
 	}
 
-	return log.New(file, "", log.Ldefault), err
+	logger := log.New(file, "", log.Ldefault)
+	logger.Level = log.Ldebug
+
+	return logger, nil
+}
+
+func waitQuitSignal(shutdown func()) {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case <-signalChan:
+		shutdown()
+	}
 }

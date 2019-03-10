@@ -39,9 +39,10 @@ const (
 
 // BuildSubscribeData build the subscribe data
 func BuildSubscribeData(group, topic, expr string) *client.SubscribeData {
-	d := &client.SubscribeData{Topic: topic, Expr: expr}
+	d := &client.SubscribeData{Topic: topic, Expr: expr, Type: ExprTypeTag}
 	if expr == "" {
 		d.Expr = subAll
+		// ignore the tags, so the file Tags is nil
 		return d
 	}
 

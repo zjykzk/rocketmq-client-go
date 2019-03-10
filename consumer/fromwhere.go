@@ -19,7 +19,10 @@ var fromWhereDescs = []string{
 }
 
 const (
-	consumeFromLastOffset fromWhere = iota
-	consumeFromFirstOffset
-	consumeFromTimestamp
+	// ConsumeFromLastOffset from the offset stored, if not found from the maxoffset
+	ConsumeFromLastOffset fromWhere = iota
+	// ConsumeFromFirstOffset from the offset stored, if not found from the zeor
+	ConsumeFromFirstOffset
+	// ConsumeFromTimestamp from the offset specified by the timestamp
+	ConsumeFromTimestamp
 )

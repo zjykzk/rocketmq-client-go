@@ -110,7 +110,6 @@ func (c *consumer) start() (err error) {
 	c.updateInstanceName()
 
 	c.subscribeQueues = client.NewSubscribeQueueTable()
-	c.subscribeData = client.NewSubcribeTable()
 	c.topicRouters = route.NewTopicRouterTable()
 
 	mqClient, err := c.buildMQClient()

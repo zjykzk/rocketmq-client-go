@@ -44,7 +44,6 @@ const (
 type pullRequestDispatcher interface {
 	submitRequestImmediately(r *pullRequest)
 	submitRequestLater(r *pullRequest, delay time.Duration)
-	shutdown()
 }
 
 // PushConsumer the consumer with push model
@@ -70,7 +69,6 @@ type PushConsumer struct {
 	pause                 uint32
 	consumeService        consumeService
 	consumeServiceBuilder func() (consumeService, error)
-	subscription          map[string]string
 
 	sched *scheduler
 
@@ -113,6 +111,7 @@ func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 			Config:          defaultConfig,
 			Server:          rocketmq.Server{State: rocketmq.StateCreating},
 			brokerSuggester: &brokerSuggester{table: make(map[string]int32, 32)},
+			subscribeData:   client.NewSubcribeTable(),
 		},
 		maxReconsumeTimes:       defaultPushMaxReconsumeTimes,
 		lastestConsumeTimestamp: defaultLastestConsumeTimestamp,
@@ -130,11 +129,10 @@ func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 		postSubscriptionWhenPull:   defaultPostSubscriptionWhenPull,
 		consumeMessageBatchMaxSize: defaultConsumeMessageBatchMaxSize,
 
-		subscription: make(map[string]string, 16),
-		sched:        newScheduler(2),
+		sched: newScheduler(2),
 	}
 	c.NameServerAddrs = namesrvAddrs
-	c.FromWhere = consumeFromLastOffset
+	c.FromWhere = ConsumeFromLastOffset
 	c.MessageModel = Clustering
 	c.Typ = Pull
 	c.assigner = &Averagely{}
@@ -165,6 +163,7 @@ func (c *PushConsumer) start() error {
 		c.logger.Errorf("build consumer service error:%s", err)
 		return err
 	}
+	c.consumeService.start()
 
 	pullService, err := newPullService(pullServiceConfig{
 		messagePuller: c,
@@ -186,9 +185,6 @@ func (c *PushConsumer) start() error {
 }
 
 func (c *PushConsumer) checkConfig() error {
-	if len(c.subscription) == 0 {
-		return errors.New("empty subcription")
-	}
 
 	if c.thresholdCountOfQueue < 1 || c.thresholdCountOfQueue > 65535 {
 		return errors.New("ThresholdCountOfQueue out of the range [1, 65535]")
@@ -229,6 +225,7 @@ func (c *PushConsumer) buildShutdowner(f func()) {
 		rocketmq.ShutdownFunc(func() {
 			c.logger.Infof("shutdown PUSH consumer, group:%s, clientID:%s START", c.GroupName, c.ClientID)
 		}),
+		rocketmq.ShutdownFunc(c.consumeService.shutdown),
 		rocketmq.ShutdownFunc(f),
 		c.Shutdowner,
 		rocketmq.ShutdownFunc(c.sched.shutdown),
@@ -269,6 +266,12 @@ func (c *PushConsumer) SendBack(m *message.Ext, delayLevel int, broker string) e
 	return c.consumer.SendBack(m, delayLevel, c.GroupName, broker)
 }
 
+// Subscribe subcribe the topic with the expression and send the subcribe to the broker
+func (c *PushConsumer) Subscribe(topic string, expr string) {
+	c.consumer.Subscribe(topic, expr)
+	c.client.SendHeartbeat()
+}
+
 func (c *PushConsumer) reblance(topic string) {
 	allQueues, newQueues, err := c.reblanceQueue(topic)
 	if err != nil {
@@ -281,14 +284,14 @@ func (c *PushConsumer) reblance(topic string) {
 
 	if c.updateProcessTableAndDispatchPullRequest(topic, newQueues) {
 		c.updateSubscribeVersion(topic)
-		c.updateThresholdOfQueue()
+		c.updateThresholdOfQueue(topic)
 	}
 }
 
 func (c *PushConsumer) updateProcessTableAndDispatchPullRequest(
 	topic string, mqs []*message.Queue,
 ) bool {
-	tmpMQs := c.consumeService.messageQueues()
+	tmpMQs := c.consumeService.messageQueues(topic)
 	currentMQs := make([]*message.Queue, len(tmpMQs))
 	for i := range currentMQs {
 		currentMQs[i] = &tmpMQs[i]
@@ -304,7 +307,7 @@ func (c *PushConsumer) updateProcessTableAndDispatchPullRequest(
 
 	// insert new mq
 	var pullRequests []pullRequest
-	for _, mq := range sub(mqs, currentMQs) {
+	for _, mq := range sub(mqs, currentMQs) { // RETRYTOPIC not ok
 		c.offsetStorer.removeOffset(mq)
 		offset, err := c.computeWhereToPull(mq)
 		if err != nil {
@@ -361,11 +364,11 @@ func (c *PushConsumer) updateSubscribeVersion(topic string) {
 
 func (c *PushConsumer) computeWhereToPull(mq *message.Queue) (offset int64, err error) {
 	switch c.FromWhere {
-	case consumeFromLastOffset:
+	case ConsumeFromLastOffset:
 		return c.computeFromLastOffset(mq)
-	case consumeFromFirstOffset:
+	case ConsumeFromFirstOffset:
 		return c.computeFromFirstOffset(mq)
-	case consumeFromTimestamp:
+	case ConsumeFromTimestamp:
 		return c.computeFromTimestamp(mq)
 	default:
 		panic("unknow from type:" + c.FromWhere.String())
@@ -437,8 +440,8 @@ func (c *PushConsumer) searchOffset(mq *message.Queue) (int64, error) {
 	)
 }
 
-func (c *PushConsumer) updateThresholdOfQueue() {
-	queueCount := len(c.consumeService.messageQueues())
+func (c *PushConsumer) updateThresholdOfQueue(topic string) {
+	queueCount := len(c.consumeService.messageQueues(topic))
 	if queueCount <= 0 {
 		return
 	}
@@ -541,6 +544,7 @@ func (c *PushConsumer) pull(r *pullRequest) {
 		offsetStorer:   c.offsetStorer,
 		sched:          c.sched,
 		logger:         c.logger,
+		pullService:    c.pullService,
 	}
 
 	err = c.client.PullMessageAsync(addr.Addr, header, ConsumerTimeoutWhenSuspend, cb.run)

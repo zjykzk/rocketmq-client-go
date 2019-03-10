@@ -70,3 +70,20 @@ func TestSubmitRequestLater(t *testing.T) {
 	ps.submitRequestLater(&pullRequest{}, time.Second)
 	assert.Equal(t, 1, len(ps.sched.queue.tasks()))
 }
+
+func TestGetOrCreateRequestQueue(t *testing.T) {
+	ps, err := newPullService(pullServiceConfig{
+		messagePuller: &fakeMessagePuller{},
+		logger:        log.Std,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prc, ok := ps.getOrCreateRequestQueue(&message.Queue{})
+	assert.True(t, ok)
+	assert.NotNil(t, prc)
+	prc1, ok := ps.getOrCreateRequestQueue(&message.Queue{})
+	assert.False(t, ok)
+	assert.Equal(t, prc, prc1)
+}

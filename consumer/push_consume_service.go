@@ -125,9 +125,12 @@ func (cs *baseConsumeService) shutdown() {
 	cs.logger.Info("shutdown consume sevice END")
 }
 
-func (cs *baseConsumeService) messageQueues() (mqs []message.Queue) {
+func (cs *baseConsumeService) messageQueues(topic string) (mqs []message.Queue) {
 	cs.processQueues.Range(func(k, _ interface{}) bool {
-		mqs = append(mqs, k.(message.Queue))
+		q := k.(message.Queue)
+		if q.Topic == topic {
+			mqs = append(mqs, q)
+		}
 		return true
 	})
 	return

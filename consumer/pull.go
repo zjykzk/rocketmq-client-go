@@ -38,12 +38,13 @@ func NewPullConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 			Config:          defaultConfig,
 			Server:          rocketmq.Server{State: rocketmq.StateCreating},
 			brokerSuggester: &brokerSuggester{table: make(map[string]int32, 32)},
+			subscribeData:   client.NewSubcribeTable(),
 		},
 	}
 	c.StartFunc = c.start
 	c.GroupName = group
 	c.NameServerAddrs = namesrvAddrs
-	c.FromWhere = consumeFromLastOffset
+	c.FromWhere = ConsumeFromLastOffset
 	c.MessageModel = Clustering
 	c.Typ = Pull
 	c.brokerSuspendMaxTime = defaultBrokerSuspendMaxTime

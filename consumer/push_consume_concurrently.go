@@ -122,6 +122,13 @@ func (cs *consumeConcurrentlyService) start() {
 	cs.baseConsumeService.start()
 	cs.startFunc(cs.clearExpiredMessage, cs.cleanExpiredInterval)
 	cs.startConsume()
+	cs.logger.Info("consume concurrently STARTED")
+}
+
+func (cs *consumeConcurrentlyService) shutdown() {
+	cs.logger.Info("shutdown consume concurrently START")
+	cs.baseConsumeService.shutdown()
+	cs.logger.Info("shutdown consume concurrently END")
 }
 
 func (cs *consumeConcurrentlyService) startConsume() {

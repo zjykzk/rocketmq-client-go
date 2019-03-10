@@ -62,6 +62,7 @@ func newPullService(conf pullServiceConfig) (*pullService, error) {
 	return &pullService{
 		pullServiceConfig: conf,
 		sched:             newScheduler(1),
+		logger:            conf.logger,
 		exitChan:          make(chan struct{}),
 	}, nil
 }
@@ -86,11 +87,11 @@ func (ps *pullService) getOrCreateRequestQueue(q *message.Queue) (chan *pullRequ
 	key := q.HashKey()
 	qr, ok := ps.queuesOfMessageQueue.Load(key)
 	if ok {
-		return qr.(chan *pullRequest), true
+		return qr.(chan *pullRequest), false
 	}
 
-	qr, _ = ps.queuesOfMessageQueue.LoadOrStore(key, make(chan *pullRequest, 10))
-	return qr.(chan *pullRequest), false
+	qr, ok = ps.queuesOfMessageQueue.LoadOrStore(key, make(chan *pullRequest, 10))
+	return qr.(chan *pullRequest), !ok
 }
 
 func (ps *pullService) startPulling(q chan *pullRequest) {

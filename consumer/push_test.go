@@ -18,7 +18,6 @@ import (
 type fakePullRequestDispatcher struct {
 	runSubmitImmediately bool
 	runSubmitLater       bool
-	runShutdown          bool
 	delay                time.Duration
 }
 
@@ -29,10 +28,6 @@ func (d *fakePullRequestDispatcher) submitRequestImmediately(r *pullRequest) {
 func (d *fakePullRequestDispatcher) submitRequestLater(r *pullRequest, delay time.Duration) {
 	d.runSubmitLater = true
 	d.delay = delay
-}
-
-func (d *fakePullRequestDispatcher) shutdown() {
-	d.runShutdown = true
 }
 
 func newTestConcurrentConsumer() *PushConsumer {
@@ -83,7 +78,7 @@ func TestUpdateProcessTable(t *testing.T) {
 	test := func(newMQs, expected []*message.Queue, expectedChanged bool) {
 		changed := pc.updateProcessTableAndDispatchPullRequest(topic, newMQs)
 		assert.Equal(t, expectedChanged, changed)
-		mqs := pc.consumeService.messageQueues()
+		mqs := pc.consumeService.messageQueues("")
 		assertMQs(t, expected, mqs)
 	}
 	newMQs := []*message.Queue{{}, {QueueID: 1}}
@@ -141,20 +136,20 @@ func TestUpdateThresholdOfQueue(t *testing.T) {
 
 	// divided by queues
 	pc.thresholdSizeOfTopic, pc.thresholdCountOfTopic = 10, 20
-	pc.updateThresholdOfQueue()
+	pc.updateThresholdOfQueue("")
 	assert.Equal(t, 5, pc.thresholdSizeOfQueue)
 	assert.Equal(t, 10, pc.thresholdCountOfQueue)
 
 	// less than 1
 	pc.thresholdSizeOfTopic, pc.thresholdCountOfTopic = 1, 1
-	pc.updateThresholdOfQueue()
+	pc.updateThresholdOfQueue("")
 	assert.Equal(t, 1, pc.thresholdSizeOfQueue)
 	assert.Equal(t, 1, pc.thresholdCountOfQueue)
 
 	// do nothing
 	pc.thresholdSizeOfTopic, pc.thresholdCountOfTopic = -1, -1
 	pc.thresholdSizeOfQueue, pc.thresholdCountOfQueue = 12, 34
-	pc.updateThresholdOfQueue()
+	pc.updateThresholdOfQueue("")
 	assert.Equal(t, 12, pc.thresholdSizeOfQueue)
 	assert.Equal(t, 34, pc.thresholdCountOfQueue)
 }
@@ -205,7 +200,7 @@ func TestComputeFromLastOffset(t *testing.T) {
 	offseter, mqClient := &fakeOffsetStorer{}, &fakeMQClient{}
 	pc.offsetStorer, pc.client = offseter, mqClient
 
-	pc.FromWhere = consumeFromLastOffset
+	pc.FromWhere = ConsumeFromLastOffset
 	mqClient.brokderAddr = "fake"
 
 	q := &message.Queue{}
@@ -254,7 +249,7 @@ func TestComputeFromFirstOffset(t *testing.T) {
 	offseter, mqClient := &fakeOffsetStorer{}, &fakeMQClient{}
 	pc.offsetStorer, pc.client = offseter, mqClient
 
-	pc.FromWhere = consumeFromFirstOffset
+	pc.FromWhere = ConsumeFromFirstOffset
 	mqClient.brokderAddr = "fake"
 
 	q := &message.Queue{}
@@ -282,7 +277,7 @@ func TestComputeFromTimestamp(t *testing.T) {
 	offseter, mqClient := &fakeOffsetStorer{}, &fakeMQClient{}
 	pc.offsetStorer, pc.client = offseter, mqClient
 
-	pc.FromWhere = consumeFromTimestamp
+	pc.FromWhere = ConsumeFromTimestamp
 	mqClient.brokderAddr = "fake"
 
 	q := &message.Queue{}

@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/zjykzk/rocketmq-client-go/consumer"
 	"github.com/zjykzk/rocketmq-client-go/log"
@@ -21,7 +18,6 @@ type messageQueueChanger struct {
 }
 
 func (qc *messageQueueChanger) Change(topic string, all, divided []*message.Queue) {
-	fmt.Printf("all queues:%v, divided:%v\n", all, divided)
 	c := qc.consumer
 	for _, q := range divided {
 
@@ -72,10 +68,5 @@ func runPull() {
 		return
 	}
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case <-signalChan:
-		c.Shutdown()
-	}
+	waitQuitSignal(c.Shutdown)
 }
