@@ -232,12 +232,12 @@ func (c callback) Run() {
 // Start client's work
 func (c *client) Start() error {
 	c.exitChan = make(chan struct{})
-	c.wg.Add(1)
 	go c.cleanExpiredFuturesPeriod()
 	return nil
 }
 
 func (c *client) cleanExpiredFuturesPeriod() {
+	c.wg.Add(1)
 	ticker := time.NewTicker(time.Second)
 	for {
 		select {

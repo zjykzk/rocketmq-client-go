@@ -6,7 +6,7 @@ type consumeService interface {
 	start()
 	shutdown()
 
-	messageQueues(topic string) []message.Queue
+	messageQueuesOfTopic(topic string) []message.Queue
 	dropAndRemoveProcessQueue(*message.Queue) bool
 	insertNewMessageQueue(*message.Queue) (*processQueue, bool)
 	flowControl(*processQueue) bool

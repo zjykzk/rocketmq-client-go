@@ -78,7 +78,7 @@ func TestUpdateProcessTable(t *testing.T) {
 	test := func(newMQs, expected []*message.Queue, expectedChanged bool) {
 		changed := pc.updateProcessTableAndDispatchPullRequest(topic, newMQs)
 		assert.Equal(t, expectedChanged, changed)
-		mqs := pc.consumeService.messageQueues("")
+		mqs := pc.consumeService.messageQueuesOfTopic("")
 		assertMQs(t, expected, mqs)
 	}
 	newMQs := []*message.Queue{{}, {QueueID: 1}}

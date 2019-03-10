@@ -158,13 +158,6 @@ func (c *PushConsumer) start() error {
 		return err
 	}
 
-	c.consumeService, err = c.consumeServiceBuilder()
-	if err != nil {
-		c.logger.Errorf("build consumer service error:%s", err)
-		return err
-	}
-	c.consumeService.start()
-
 	pullService, err := newPullService(pullServiceConfig{
 		messagePuller: c,
 		logger:        c.logger,
@@ -173,6 +166,13 @@ func (c *PushConsumer) start() error {
 		return err
 	}
 	c.pullService = pullService
+
+	c.consumeService, err = c.consumeServiceBuilder()
+	if err != nil {
+		c.logger.Errorf("build consumer service error:%s", err)
+		return err
+	}
+	c.consumeService.start()
 
 	c.buildShutdowner(pullService.shutdown)
 
@@ -291,7 +291,7 @@ func (c *PushConsumer) reblance(topic string) {
 func (c *PushConsumer) updateProcessTableAndDispatchPullRequest(
 	topic string, mqs []*message.Queue,
 ) bool {
-	tmpMQs := c.consumeService.messageQueues(topic)
+	tmpMQs := c.consumeService.messageQueuesOfTopic(topic)
 	currentMQs := make([]*message.Queue, len(tmpMQs))
 	for i := range currentMQs {
 		currentMQs[i] = &tmpMQs[i]
@@ -307,7 +307,7 @@ func (c *PushConsumer) updateProcessTableAndDispatchPullRequest(
 
 	// insert new mq
 	var pullRequests []pullRequest
-	for _, mq := range sub(mqs, currentMQs) { // RETRYTOPIC not ok
+	for _, mq := range sub(mqs, currentMQs) {
 		c.offsetStorer.removeOffset(mq)
 		offset, err := c.computeWhereToPull(mq)
 		if err != nil {
@@ -441,7 +441,7 @@ func (c *PushConsumer) searchOffset(mq *message.Queue) (int64, error) {
 }
 
 func (c *PushConsumer) updateThresholdOfQueue(topic string) {
-	queueCount := len(c.consumeService.messageQueues(topic))
+	queueCount := len(c.consumeService.messageQueuesOfTopic(topic))
 	if queueCount <= 0 {
 		return
 	}

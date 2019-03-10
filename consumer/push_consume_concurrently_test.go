@@ -405,14 +405,14 @@ func TestGetConsumingMessageQueue(t *testing.T) {
 	cs.newProcessQueue(&mqs[1])
 
 	// all
-	mqs1 := cs.messageQueues("")
+	mqs1 := cs.messageQueuesOfTopic("")
 	assert.Equal(t, 2, len(mqs))
 	q01, q02 := mqs[0], mqs[1]
 	q11, q12 := mqs1[0], mqs1[1]
 	assert.True(t, (q01 == q11 || q01 == q12) && (q02 == q11 || q02 == q12))
 
 	// empty
-	mqs1 = cs.messageQueues("empty")
+	mqs1 = cs.messageQueuesOfTopic("empty")
 	assert.Equal(t, 0, len(mqs1))
 }
 
