@@ -37,18 +37,15 @@ const (
 	//
 	//Example: (a > 10 AND a < 100) OR (b IS NOT NULL AND b=TRUE)
 	ExprTypeSQL92
-)
 
-func (t ExprType) String() string {
-	if t == ExprTypeTag {
-		return "TAG"
-	}
-	return "SQL92"
-}
-
-const (
 	subAll = "*"
 )
+
+var exprTypeNames = [...]string{"TAG", "SQL92"}
+
+func (t ExprType) String() string {
+	return exprTypeNames[t]
+}
 
 // BuildSubscribeData build the subscribe data with tag type
 func BuildSubscribeData(group, topic, expr string) *client.SubscribeData {

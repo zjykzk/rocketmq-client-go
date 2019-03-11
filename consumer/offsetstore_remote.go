@@ -58,9 +58,7 @@ func (rs *remoteStore) persistOne(q *message.Queue) {
 	}
 
 	err := rs.offsetOper.update(q, of)
-	if err != nil {
-		rs.logger.Errorf("persist queue:%s, error:%s", q, err)
-	}
+	rs.logger.Infof("[persist] persist queue:%s, error:%v", q, err)
 }
 
 // updateQueues persists the offset to the remote
