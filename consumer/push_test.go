@@ -426,7 +426,7 @@ func TestPushPull(t *testing.T) {
 
 	// check header
 	c.subscribeData.Put(pr.messageQueue.Topic, &client.SubscribeData{
-		Type:    ExprTypeSQL92,
+		Type:    ExprTypeSQL92.String(),
 		Version: 10000,
 		Expr:    "a>1",
 	})
@@ -437,7 +437,7 @@ func TestPushPull(t *testing.T) {
 	assert.Equal(t, int32(c.pullBatchSize), header.MaxCount)
 	assert.Equal(t, int64(123), header.CommitOffset)
 	assert.Equal(t, "a>1", header.Subscription)
-	assert.Equal(t, ExprTypeSQL92, header.ExpressionType)
+	assert.Equal(t, ExprTypeSQL92.String(), header.ExpressionType)
 	assert.Equal(t, int64(10000), header.SubVersion)
 	assert.Equal(t, buildPullFlag(true, true, false, false), header.SysFlag)
 

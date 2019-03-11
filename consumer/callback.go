@@ -51,6 +51,8 @@ func (cb *pullCallback) onSuc(resp *rpc.PullResponse) {
 		cb.onNoNewMessage(pr)
 	case OffsetIllegal:
 		cb.onOffsetIllegal(pr)
+	default:
+		panic("[BUG] cannot process the status:" + pr.Status.String())
 	}
 }
 

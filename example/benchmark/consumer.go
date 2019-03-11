@@ -158,6 +158,7 @@ func (bc *bconsumer) run(args []string) {
 	c, err := consumer.NewConcurrentConsumer(
 		groupID, strings.Split(bc.nameSrv, ","), &concurrentlyConsumer{stati: &stati}, logger,
 	)
+	c.FromWhere = consumer.ConsumeFromFirstOffset
 	if err != nil {
 		fmt.Printf("new push cosnumer error:%s\n", err)
 		return

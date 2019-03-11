@@ -186,7 +186,7 @@ func (c *PullConsumer) pullSync(
 			SuspendTimeoutMillis: int64(c.brokerSuspendMaxTime / time.Millisecond),
 			Subscription:         expr,
 			SubVersion:           0,
-			ExpressionType:       ExprTypeTag,
+			ExpressionType:       ExprTypeTag.String(),
 		},
 		c.pullTimeout)
 	if err != nil {

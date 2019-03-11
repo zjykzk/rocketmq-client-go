@@ -7,13 +7,15 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/client"
 )
 
+// ExprType the filter type of the subcription
+type ExprType int
+
 const (
-	subAll = "*"
 	// ExprTypeTag tag filter
 	// Only support or operation such as
 	// "tag1 || tag2 || tag3", <br>
 	// If null or * expression,meaning subscribe all.
-	ExprTypeTag = "TAG"
+	ExprTypeTag ExprType = iota
 
 	// ExprTypeSQL92 sql filter
 	//
@@ -34,15 +36,29 @@ const (
 	//=TRUE, =FALSE, check parameter whether is true, or false.
 	//
 	//Example: (a > 10 AND a < 100) OR (b IS NOT NULL AND b=TRUE)
-	ExprTypeSQL92 = "SQL92"
+	ExprTypeSQL92
+)
+
+func (t ExprType) String() string {
+	if t == ExprTypeTag {
+		return "TAG"
+	}
+	return "SQL92"
+}
+
+const (
+	subAll = "*"
 )
 
 // BuildSubscribeData build the subscribe data with tag type
 func BuildSubscribeData(group, topic, expr string) *client.SubscribeData {
-	d := &client.SubscribeData{Topic: topic, Expr: expr, Type: ExprTypeTag}
+	d := &client.SubscribeData{Topic: topic, Expr: expr, Type: ExprTypeTag.String()}
 	if expr == "" {
 		d.Expr = subAll
 		// ignore the tags, so the file Tags is nil
+	}
+
+	if d.Expr == subAll {
 		return d
 	}
 
@@ -64,7 +80,7 @@ func BuildSubscribeData(group, topic, expr string) *client.SubscribeData {
 
 // IsTag returns true if the expresstion type is "TAG" or empty string, false otherwise
 func IsTag(typ string) bool {
-	return ExprTypeTag == typ
+	return ExprTypeTag.String() == typ
 }
 
 // ParseTags parse the expression as tag elements
