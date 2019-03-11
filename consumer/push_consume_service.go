@@ -118,11 +118,11 @@ func (cs *baseConsumeService) start() {
 }
 
 func (cs *baseConsumeService) shutdown() {
-	cs.logger.Info("shutdown consume sevice START")
+	cs.logger.Info("shutdown base consume sevice START")
 	close(cs.exitChan)
 	cs.wg.Wait()
 	cs.scheduler.shutdown()
-	cs.logger.Info("shutdown consume sevice END")
+	cs.logger.Info("shutdown base consume sevice END")
 }
 
 func (cs *baseConsumeService) messageQueuesOfTopic(topic string) (mqs []message.Queue) {

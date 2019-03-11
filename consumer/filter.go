@@ -37,7 +37,7 @@ const (
 	ExprTypeSQL92 = "SQL92"
 )
 
-// BuildSubscribeData build the subscribe data
+// BuildSubscribeData build the subscribe data with tag type
 func BuildSubscribeData(group, topic, expr string) *client.SubscribeData {
 	d := &client.SubscribeData{Topic: topic, Expr: expr, Type: ExprTypeTag}
 	if expr == "" {
@@ -64,7 +64,7 @@ func BuildSubscribeData(group, topic, expr string) *client.SubscribeData {
 
 // IsTag returns true if the expresstion type is "TAG" or empty string, false otherwise
 func IsTag(typ string) bool {
-	return typ == "" || ExprTypeTag == typ
+	return ExprTypeTag == typ
 }
 
 // ParseTags parse the expression as tag elements

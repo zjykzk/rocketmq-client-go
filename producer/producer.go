@@ -131,7 +131,7 @@ func (p *Producer) updateInstanceName() {
 
 func (p *Producer) buildShutdowner(f func()) {
 	shutdowner := &rocketmq.ShutdownCollection{}
-	shutdowner.AddFuncs(
+	shutdowner.AddLastFuncs(
 		func() {
 			p.logger.Infof("shutdown producer:%s %s START", p.GroupName, p.ClientID)
 		},

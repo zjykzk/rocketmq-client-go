@@ -37,8 +37,18 @@ func TestServer(t *testing.T) {
 
 func TestShutdownFuncCollection(t *testing.T) {
 	fs := &ShutdownCollection{}
-	count := 0
-	fs.AddFuncs(func() { count++ }, func() { count += 2 })
+	var order []int
+	fs.AddLastFuncs(
+		func() { order = append(order, 1) },
+		func() { order = append(order, 2) },
+	)
+	fs.AddLast(ShutdownFunc(func() { order = append(order, 5) }))
 	fs.Shutdown()
-	assert.Equal(t, 3, count)
+	assert.Equal(t, []int{1, 2, 5}, order)
+
+	order = []int{}
+	fs.AddFirst(ShutdownFunc(func() { order = append(order, 3) }))
+	fs.AddFirstFuncs(func() { order = append(order, 4) })
+	fs.Shutdown()
+	assert.Equal(t, []int{4, 3, 1, 2, 5}, order)
 }

@@ -3,9 +3,6 @@ package consumer
 import "github.com/zjykzk/rocketmq-client-go/message"
 
 type consumeService interface {
-	start()
-	shutdown()
-
 	messageQueuesOfTopic(topic string) []message.Queue
 	dropAndRemoveProcessQueue(*message.Queue) bool
 	insertNewMessageQueue(*message.Queue) (*processQueue, bool)

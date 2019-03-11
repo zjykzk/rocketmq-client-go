@@ -85,7 +85,7 @@ func (a *Admin) buildMQClient() (*client.MQClient, error) {
 
 func (a *Admin) buildShutdowner(f func()) {
 	shutdowner := &rocketmq.ShutdownCollection{}
-	shutdowner.AddFuncs(
+	shutdowner.AddLastFuncs(
 		func() {
 			a.logger.Infof("shutdown admin:%s START", a.GroupName)
 		},

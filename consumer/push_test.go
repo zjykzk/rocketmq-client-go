@@ -32,12 +32,11 @@ func (d *fakePullRequestDispatcher) submitRequestLater(r *pullRequest, delay tim
 
 func newTestConcurrentConsumer() *PushConsumer {
 	pc, err := NewConcurrentConsumer(
-		"test push consumer", []string{"dummy"}, &fakeConcurrentlyConsumer{}, log.Std,
+		"test-push-consumer", []string{"dummy"}, &fakeConcurrentlyConsumer{}, log.Std,
 	)
 	pc.client = &fakeMQClient{}
 	pc.pullService = &fakePullRequestDispatcher{}
 	pc.offsetStorer = &fakeOffsetStorer{}
-	pc.subscribeData = client.NewSubcribeTable()
 	if err != nil {
 		panic(err)
 	}
@@ -453,4 +452,14 @@ func TestPushPull(t *testing.T) {
 	c.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
+}
+
+func TestStartAndShutdown(t *testing.T) {
+	c := newTestConcurrentConsumer()
+
+	err := c.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Shutdown()
 }

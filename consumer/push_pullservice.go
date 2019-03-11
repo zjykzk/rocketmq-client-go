@@ -108,5 +108,7 @@ func (ps *pullService) startPulling(q chan *pullRequest) {
 }
 
 func (ps *pullService) shutdown() {
+	ps.logger.Info("shutdown pull service START")
 	close(ps.exitChan)
+	ps.logger.Info("shutdown pull service END")
 }

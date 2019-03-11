@@ -65,16 +65,35 @@ type ShutdownCollection struct {
 	shutdowns []Shutdowner
 }
 
-// AddFuncs add shutdown funcs
-func (c *ShutdownCollection) AddFuncs(fs ...func()) {
+// AddLastFuncs add shutdown funcs
+func (c *ShutdownCollection) AddLastFuncs(fs ...func()) {
 	for _, f := range fs {
 		c.shutdowns = append(c.shutdowns, ShutdownFunc(f))
 	}
 }
 
-// Add add shutdowners
-func (c *ShutdownCollection) Add(s ...Shutdowner) {
+// AddLast append shutdowne funcs to the end
+func (c *ShutdownCollection) AddLast(s ...Shutdowner) {
 	c.shutdowns = append(c.shutdowns, s...)
+}
+
+// AddFirstFuncs insert the shutdowner at the beginning
+func (c *ShutdownCollection) AddFirstFuncs(fs ...func()) {
+	s := make([]Shutdowner, len(fs))
+	for i, f := range fs {
+		s[i] = ShutdownFunc(f)
+	}
+	c.AddFirst(s...)
+}
+
+// AddFirst insert the shutdowner at the beginning
+func (c *ShutdownCollection) AddFirst(s ...Shutdowner) {
+	l := len(s)
+	r := make([]Shutdowner, len(c.shutdowns)+l)
+	copy(r, s)
+	copy(r[l:], c.shutdowns)
+
+	c.shutdowns = r
 }
 
 // Shutdown call all the added shutdown func, in the added order

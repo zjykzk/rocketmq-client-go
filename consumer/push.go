@@ -89,7 +89,7 @@ func NewConcurrentConsumer(
 	c = newPushConsumer(group, namesrvAddrs, logger)
 
 	c.consumeServiceBuilder = func() (consumeService, error) {
-		return newConsumeConcurrentlyService(concurrentlyServiceConfig{
+		cs, err := newConsumeConcurrentlyService(concurrentlyServiceConfig{
 			consumeServiceConfig: consumeServiceConfig{
 				group:           group,
 				logger:          logger,
@@ -100,6 +100,17 @@ func NewConcurrentConsumer(
 			consumer:       userConsumer,
 			batchSize:      c.consumeBatchSize,
 		})
+		if err != nil {
+			return nil, err
+		}
+
+		cs.start()
+
+		shutdowner := &rocketmq.ShutdownCollection{}
+		shutdowner.AddFirstFuncs(cs.shutdown)
+
+		c.Shutdowner = shutdowner
+		return cs, nil
 	}
 	return
 }
@@ -148,7 +159,7 @@ func (c *PushConsumer) start() error {
 	c.logger.Info("start pull consumer")
 	err := c.checkConfig()
 	if err != nil {
-		return err
+		return fmt.Errorf("push consumer configure error:%s", err)
 	}
 
 	c.subscribeRetryTopic()
@@ -158,6 +169,9 @@ func (c *PushConsumer) start() error {
 		return err
 	}
 
+	shutdowner := &rocketmq.ShutdownCollection{}
+	shutdowner.AddLastFuncs(c.shutdownStart)
+
 	pullService, err := newPullService(pullServiceConfig{
 		messagePuller: c,
 		logger:        c.logger,
@@ -166,15 +180,20 @@ func (c *PushConsumer) start() error {
 		return err
 	}
 	c.pullService = pullService
+	shutdowner.AddLastFuncs(pullService.shutdown)
 
-	c.consumeService, err = c.consumeServiceBuilder()
+	consumeService, err := c.consumeServiceBuilder()
 	if err != nil {
 		c.logger.Errorf("build consumer service error:%s", err)
 		return err
 	}
-	c.consumeService.start()
+	c.consumeService = consumeService
 
-	c.buildShutdowner(pullService.shutdown)
+	shutdowner.AddLastFuncs(c.sched.shutdown)
+	shutdowner.AddLast(c.Shutdowner)
+	shutdowner.AddLastFuncs(c.shutdownEnd)
+
+	c.Shutdowner = shutdowner
 
 	c.updateTopicRouterInfoFromNamesrv()
 	c.registerFilter()
@@ -219,22 +238,12 @@ func (c *PushConsumer) checkConfig() error {
 	return nil
 }
 
-func (c *PushConsumer) buildShutdowner(f func()) {
-	shutdowner := &rocketmq.ShutdownCollection{}
-	shutdowner.Add(
-		rocketmq.ShutdownFunc(func() {
-			c.logger.Infof("shutdown PUSH consumer, group:%s, clientID:%s START", c.GroupName, c.ClientID)
-		}),
-		rocketmq.ShutdownFunc(c.consumeService.shutdown),
-		rocketmq.ShutdownFunc(f),
-		c.Shutdowner,
-		rocketmq.ShutdownFunc(c.sched.shutdown),
-		rocketmq.ShutdownFunc(func() {
-			c.logger.Infof("shutdown PUSH consumer, group:%s, clientID:%s END", c.GroupName, c.ClientID)
-		}),
-	)
+func (c *PushConsumer) shutdownStart() {
+	c.logger.Infof("shutdown PUSH consumer, group:%s, clientID:%s START", c.GroupName, c.ClientID)
+}
 
-	c.Shutdowner = shutdowner
+func (c *PushConsumer) shutdownEnd() {
+	c.logger.Infof("shutdown PUSH consumer, group:%s, clientID:%s END", c.GroupName, c.ClientID)
 }
 
 func (c *PushConsumer) subscribeRetryTopic() {
@@ -264,12 +273,6 @@ func (c *PushConsumer) registerFilter() {
 // least time specified by the delayLevel
 func (c *PushConsumer) SendBack(m *message.Ext, delayLevel int, broker string) error {
 	return c.consumer.SendBack(m, delayLevel, c.GroupName, broker)
-}
-
-// Subscribe subcribe the topic with the expression and send the subcribe to the broker
-func (c *PushConsumer) Subscribe(topic string, expr string) {
-	c.consumer.Subscribe(topic, expr)
-	c.client.SendHeartbeat()
 }
 
 func (c *PushConsumer) reblance(topic string) {

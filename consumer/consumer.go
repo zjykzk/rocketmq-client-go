@@ -98,7 +98,7 @@ type consumer struct {
 func (c *consumer) start() (err error) {
 	err = c.checkConfig()
 	if err != nil {
-		return
+		return fmt.Errorf("base consumer configure error:%s", err)
 	}
 
 	c.ClientIP, err = rocketmq.GetIPStr()
@@ -183,13 +183,13 @@ func (c *consumer) updateInstanceName() {
 
 func (c *consumer) buildShutdowner(f func()) {
 	shutdowner := &rocketmq.ShutdownCollection{}
-	shutdowner.AddFuncs(
+	shutdowner.AddLastFuncs(
 		func() {
-			c.logger.Infof("shutdown consumer, group:%s, clientID:%s START", c.GroupName, c.ClientID)
+			c.logger.Infof("shutdown base consumer, group:%s, clientID:%s START", c.GroupName, c.ClientID)
 		},
 		c.shutdown, f,
 		func() {
-			c.logger.Infof("shutdown consumer, group:%s, clientID:%s END", c.GroupName, c.ClientID)
+			c.logger.Infof("shutdown base consumer, group:%s, clientID:%s END", c.GroupName, c.ClientID)
 		},
 	)
 	c.Shutdowner = shutdowner
