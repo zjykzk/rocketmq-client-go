@@ -20,6 +20,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/zjykzk/rocketmq-client-go/log"
 )
 
 type command interface {
@@ -68,4 +70,17 @@ func main() {
 	}
 
 	cmd.run(os.Args[2:])
+}
+
+func newLogger(filename string) (log.Logger, error) {
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		println("create file error", err.Error())
+		return nil, err
+	}
+
+	logger := log.New(file, "", log.Ldefault)
+	logger.Level = log.Ldebug
+
+	return logger, nil
 }

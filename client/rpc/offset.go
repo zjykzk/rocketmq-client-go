@@ -38,8 +38,9 @@ func QueryConsumerOffset(
 	}
 
 	if cmd.Code != Success {
-		err = brokerError(cmd)
+		return 0, brokerError(cmd)
 	}
+
 	offset, err := strconv.ParseInt(cmd.ExtFields["offset"], 10, 64)
 	if err != nil {
 		return 0, dataError(err)

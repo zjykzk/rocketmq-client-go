@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/zjykzk/rocketmq-client-go/consumer"
-	"github.com/zjykzk/rocketmq-client-go/log"
+	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
 type statiBenchmarkConsumerSnapshot struct {
@@ -88,8 +88,6 @@ type bconsumer struct {
 	testMinutes    int
 	instanceCount  int
 
-	c *consumer.PullConsumer
-
 	flags *flag.FlagSet
 
 	groupID string
@@ -110,34 +108,6 @@ func init() {
 	flags.IntVar(&c.instanceCount, "i", 1, "instance count")
 
 	registerCommand("consumer", c)
-}
-
-func (bc *bconsumer) consumeMsg(stati *statiBenchmarkConsumerSnapshot, exit chan struct{}) {
-	// TODO
-	//consumer.Subscribe(c.topic, c.expression, func(m *rocketmq.MessageExt) rocketmq.ConsumeStatus {
-	//atomic.AddInt64(&stati.receiveMessageTotal, 1)
-	//now := time.Now().UnixNano() / int64(time.Millisecond)
-	//b2cRT := now - m.BornTimestamp
-	//atomic.AddInt64(&stati.born2ConsumerTotalRT, b2cRT)
-	//s2cRT := now - m.StoreTimestamp
-	//atomic.AddInt64(&stati.store2ConsumerTotalRT, s2cRT)
-
-	//for {
-	//old := atomic.LoadInt64(&stati.born2ConsumerMaxRT)
-	//if old >= b2cRT || atomic.CompareAndSwapInt64(&stati.born2ConsumerMaxRT, old, b2cRT) {
-	//break
-	//}
-	//}
-
-	//for {
-	//old := atomic.LoadInt64(&stati.store2ConsumerMaxRT)
-	//if old >= s2cRT || atomic.CompareAndSwapInt64(&stati.store2ConsumerMaxRT, old, s2cRT) {
-	//break
-	//}
-	//}
-
-	//return rocketmq.ConsumeSuccess
-	//})
 }
 
 func (bc *bconsumer) run(args []string) {
@@ -177,30 +147,35 @@ func (bc *bconsumer) run(args []string) {
 		groupID += fmt.Sprintf("_%d", time.Now().UnixNano()/int64(time.Millisecond)%100)
 	}
 
-	c := consumer.NewPullConsumer( // FIXME
-		bc.groupID, strings.Split(bc.nameSrv, ","), log.Std,
-	)
+	logger, err := newLogger("bc.log")
+	if err != nil {
+		fmt.Printf("new logger error:%s\n", err)
+		return
+	}
 
-	err := c.Start()
+	stati := statiBenchmarkConsumerSnapshot{}
+
+	c, err := consumer.NewConcurrentConsumer(
+		groupID, strings.Split(bc.nameSrv, ","), &concurrentlyConsumer{stati: &stati}, logger,
+	)
+	if err != nil {
+		fmt.Printf("new push cosnumer error:%s\n", err)
+		return
+	}
+
+	c.Subscribe(bc.topic, bc.expression)
+
+	err = c.Start()
 	if err != nil {
 		fmt.Printf("start cosnumer error:%s\n", err)
 		return
 	}
 	defer c.Shutdown()
-	bc.c = c
 
-	stati := statiBenchmarkConsumerSnapshot{}
 	snapshots := consumeSnapshots{cur: &stati}
 	exitChan := make(chan struct{})
 
 	wg := sync.WaitGroup{}
-
-	go func() {
-		wg.Add(1)
-		bc.consumeMsg(&stati, exitChan)
-		wg.Done()
-	}()
-
 	// snapshot
 	go func() {
 		wg.Add(1)
@@ -249,4 +224,35 @@ func (bc *bconsumer) run(args []string) {
 
 func (bc *bconsumer) usage() {
 	bc.flags.Usage()
+}
+
+type concurrentlyConsumer struct {
+	stati *statiBenchmarkConsumerSnapshot
+}
+
+func (c *concurrentlyConsumer) Consume(
+	messages []*message.Ext, ctx *consumer.ConcurrentlyContext,
+) consumer.ConsumeConcurrentlyStatus {
+	m := messages[0]
+	now := time.Now().UnixNano() / int64(time.Millisecond)
+	atomic.AddInt64(&c.stati.receiveMessageTotal, int64(len(messages)))
+	b2cRT := now - m.BornTimestamp
+	atomic.AddInt64(&c.stati.born2ConsumerTotalRT, b2cRT)
+	s2cRT := now - m.StoreTimestamp
+	atomic.AddInt64(&c.stati.store2ConsumerTotalRT, s2cRT)
+	for {
+		old := atomic.LoadInt64(&c.stati.born2ConsumerMaxRT)
+		if old >= b2cRT || atomic.CompareAndSwapInt64(&c.stati.born2ConsumerMaxRT, old, b2cRT) {
+			break
+		}
+	}
+
+	for {
+		old := atomic.LoadInt64(&c.stati.store2ConsumerMaxRT)
+		if old >= s2cRT || atomic.CompareAndSwapInt64(&c.stati.store2ConsumerMaxRT, old, s2cRT) {
+			break
+		}
+	}
+
+	return consumer.ConcurrentlySuccess
 }
