@@ -7,8 +7,7 @@
 - [x] fault strategy with time.Duration
 - [x] add std log
 - [x] producer body size limit
-- [ ] consumer long polling
-- [ ] default producer
+- [x] consumer long polling
 - [ ] consumer stats manager
 - [ ] vip request
 - [ ] transaction
