@@ -45,9 +45,7 @@ func (cb *pullCallback) onSuc(resp *rpc.PullResponse) {
 	switch pr.Status {
 	case Found:
 		cb.onFound(pr)
-	case NoNewMessage:
-		fallthrough
-	case NoMatchedMessage:
+	case NoNewMessage, NoMatchedMessage:
 		cb.onNoNewMessage(pr)
 	case OffsetIllegal:
 		cb.onOffsetIllegal(pr)
@@ -119,7 +117,7 @@ func (cb *pullCallback) onOffsetIllegal(pr *PullResult) {
 	req := cb.request
 	req.processQueue.drop()
 
-	_ = cb.sched.scheduleFuncAfter(func() {
+	cb.sched.scheduleFuncAfter(func() {
 		cb.offsetStorer.updateOffset(req.messageQueue, pr.NextBeginOffset)
 		cb.offsetStorer.persistOne(req.messageQueue)
 		cb.consumeService.dropAndRemoveProcessQueue(req.messageQueue)

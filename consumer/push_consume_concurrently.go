@@ -333,7 +333,6 @@ func (cs *consumeConcurrentlyService) insertNewMessageQueue(mq *message.Queue) (
 		cs.logger.Infof("message queue:%s exist", mq)
 		return nil, false
 	}
-	cs.offseter.removeOffset(mq)
 	return &cpq.processQueue, true
 }
 

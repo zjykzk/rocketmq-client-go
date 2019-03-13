@@ -168,7 +168,7 @@ AGAIN:
 func (bp *bproducer) run(args []string) {
 	var err error
 	// setup trace
-	f, err := os.Create("trace.out")
+	f, err := os.Create("produce-trace.out")
 	if err != nil {
 		panic(err)
 	}

@@ -399,6 +399,7 @@ func (c *MQClient) SendHeartbeat() {
 
 	if c.brokerAddrs.size() == 0 {
 		c.logger.Warn("send heartbeat, but broker address is empty")
+		return
 	}
 
 	c.Lock()

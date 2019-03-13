@@ -196,8 +196,8 @@ func (c *consumer) buildShutdowner(f func()) {
 }
 
 func (c *consumer) scheduleTasks() {
-	c.schedule(time.Second, c.ReblanceInterval, c.ReblanceQueue)
-	c.schedule(time.Second, c.PersistConsumerOffsetInterval, c.PersistOffset)
+	c.schedule(time.Second*20, c.ReblanceInterval, c.ReblanceQueue)
+	c.schedule(time.Second*10, c.PersistConsumerOffsetInterval, c.PersistOffset)
 }
 
 // Shutdown the works of consumer

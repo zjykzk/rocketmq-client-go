@@ -15,11 +15,10 @@ const (
 )
 
 type pullRequest struct {
-	group         string
-	messageQueue  *message.Queue
-	processQueue  *processQueue
-	nextOffset    int64
-	isLockedFirst bool
+	group        string
+	messageQueue *message.Queue
+	processQueue *processQueue
+	nextOffset   int64
 }
 
 func (r *pullRequest) String() string {
@@ -44,6 +43,7 @@ type pullService struct {
 	logger log.Logger
 
 	exitChan chan struct{}
+	wg       sync.WaitGroup
 }
 
 func newPullService(conf pullServiceConfig) (*pullService, error) {
@@ -95,12 +95,14 @@ func (ps *pullService) getOrCreateRequestQueue(q *message.Queue) (chan *pullRequ
 }
 
 func (ps *pullService) startPulling(q chan *pullRequest) {
+	ps.wg.Add(1)
 	go func() {
 		for {
 			select {
 			case r := <-q:
 				ps.messagePuller.pull(r)
 			case <-ps.exitChan:
+				ps.wg.Done()
 				return
 			}
 		}
@@ -110,5 +112,6 @@ func (ps *pullService) startPulling(q chan *pullRequest) {
 func (ps *pullService) shutdown() {
 	ps.logger.Info("shutdown pull service START")
 	close(ps.exitChan)
+	ps.wg.Wait()
 	ps.logger.Info("shutdown pull service END")
 }

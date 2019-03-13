@@ -54,11 +54,12 @@ func (rs *remoteStore) persist() error {
 func (rs *remoteStore) persistOne(q *message.Queue) {
 	of, ok := rs.readOffsetFromMemory(q)
 	if !ok {
+		rs.logger.Errorf("[persist] queue:%s, of:%d NOT FOUND", q, of)
 		return
 	}
 
 	err := rs.offsetOper.update(q, of)
-	rs.logger.Infof("[persist] persist queue:%s, error:%v", q, err)
+	rs.logger.Infof("[persist] queue:%s, of:%d error:%v", q, of, err)
 }
 
 // updateQueues persists the offset to the remote

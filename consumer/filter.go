@@ -3,6 +3,7 @@ package consumer
 import (
 	"hash/fnv"
 	"strings"
+	"time"
 
 	"github.com/zjykzk/rocketmq-client-go/client"
 )
@@ -49,7 +50,12 @@ func (t ExprType) String() string {
 
 // BuildSubscribeData build the subscribe data with tag type
 func BuildSubscribeData(group, topic, expr string) *client.SubscribeData {
-	d := &client.SubscribeData{Topic: topic, Expr: expr, Type: ExprTypeTag.String()}
+	d := &client.SubscribeData{
+		Topic:   topic,
+		Expr:    expr,
+		Type:    ExprTypeTag.String(),
+		Version: time.Now().UnixNano() / int64(time.Millisecond),
+	}
 	if expr == "" {
 		d.Expr = subAll
 		// ignore the tags, so the file Tags is nil

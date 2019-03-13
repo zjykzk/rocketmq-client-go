@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/trace"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -73,8 +74,8 @@ func (s *consumeSnapshots) printStati() {
 	s.RUnlock()
 
 	fmt.Printf(
-		"Consume TPS: %d Average(B2C) RT: %7.3f Average(S2C) RT: %7.3f MAX(B2C) RT: %d MAX(S2C) RT: %d\n",
-		int64(consumeTps), avgB2CRT, avgS2CRT, l.born2ConsumerMaxRT, l.store2ConsumerMaxRT,
+		"Consume TPS: %d Average(B2C) RT: %7.3f Average(S2C) RT: %7.3f MAX(B2C) RT: %d MAX(S2C) RT: %d Total:%d\n",
+		int64(consumeTps), avgB2CRT, avgS2CRT, l.born2ConsumerMaxRT, l.store2ConsumerMaxRT, l.receiveMessageTotal,
 	)
 }
 
@@ -86,7 +87,6 @@ type bconsumer struct {
 	filterType     string
 	expression     string
 	testMinutes    int
-	instanceCount  int
 
 	flags *flag.FlagSet
 
@@ -105,12 +105,25 @@ func init() {
 	flags.StringVar(&c.filterType, "f", "", "filter type,options:TAG|SQL92, or empty")
 	flags.StringVar(&c.expression, "e", "*", "expression")
 	flags.IntVar(&c.testMinutes, "m", 10, "test minutes")
-	flags.IntVar(&c.instanceCount, "i", 1, "instance count")
 
 	registerCommand("consumer", c)
 }
 
 func (bc *bconsumer) run(args []string) {
+	var err error
+	// setup trace
+	f, err := os.Create("consume-trace.out")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	err = trace.Start(f)
+	if err != nil {
+		panic(err)
+	}
+	defer trace.Stop()
+
 	bc.flags.Parse(args)
 	if bc.topic == "" {
 		println("empty topic")
@@ -132,12 +145,6 @@ func (bc *bconsumer) run(args []string) {
 
 	if bc.testMinutes <= 0 {
 		println("test time must be positive integer")
-		bc.usage()
-		return
-	}
-
-	if bc.instanceCount <= 0 {
-		println("thread count must be positive integer")
 		bc.usage()
 		return
 	}

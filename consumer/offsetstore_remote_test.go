@@ -49,11 +49,18 @@ func TestRemoteStore(t *testing.T) {
 	assert.Equal(t, int64(10), of)
 	assert.Equal(t, fakeRemoteOper.fetchErr, err)
 
-	rs.updateOffset(q, 0)
+	// update
+	newQueue := &message.Queue{QueueID: 200, Topic: "new "}
+	rs.updateOffset(newQueue, 2)
+	of, err = rs.readOffset(newQueue, ReadOffsetFromMemory)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(2), of)
 
 	// persistOne
 	rs.persistOne(&message.Queue{QueueID: 2})
 	assert.False(t, fakeRemoteOper.runUpdate)
+
+	rs.updateOffset(q, 2)
 	rs.persistOne(q)
 	assert.True(t, fakeRemoteOper.runUpdate)
 	fakeRemoteOper.updateErr = errors.New("bad update")

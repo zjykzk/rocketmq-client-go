@@ -108,6 +108,7 @@ func NewConcurrentConsumer(
 
 		shutdowner := &rocketmq.ShutdownCollection{}
 		shutdowner.AddFirstFuncs(cs.shutdown)
+		shutdowner.AddLast(c.Shutdowner)
 
 		c.Shutdowner = shutdowner
 		return cs, nil
@@ -145,7 +146,7 @@ func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 	c.NameServerAddrs = namesrvAddrs
 	c.FromWhere = ConsumeFromLastOffset
 	c.MessageModel = Clustering
-	c.Typ = Pull
+	c.Typ = Push
 	c.assigner = &Averagely{}
 	c.reblancer = c
 	c.runnerInfo = c.RunningInfo
@@ -311,7 +312,6 @@ func (c *PushConsumer) updateProcessTableAndDispatchPullRequest(
 	// insert new mq
 	var pullRequests []pullRequest
 	for _, mq := range sub(mqs, currentMQs) {
-		c.offsetStorer.removeOffset(mq)
 		offset, err := c.computeWhereToPull(mq)
 		if err != nil {
 			c.logger.Errorf("compute where to pull the message error:%s", err)
