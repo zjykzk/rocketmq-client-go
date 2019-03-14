@@ -12,7 +12,7 @@ type mqClient interface {
 	UnregisterConsumer(group string)
 
 	UpdateTopicRouterInfoFromNamesrv(topic string) error
-	FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (*client.FindBrokerResult, error)
+	FindBrokerAddr(name string, id int32, onlyThisBroker bool) (*client.FindBrokerResult, error)
 
 	GetConsumerIDs(addr, group string, to time.Duration) ([]string, error)
 	PullMessageSync(addr string, header *rpc.PullHeader, to time.Duration) (*rpc.PullResponse, error)
