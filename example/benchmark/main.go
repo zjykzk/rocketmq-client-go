@@ -54,6 +54,9 @@ func usage() {
 }
 
 // go run *.go [command name] [command args]
+// example:
+// go run consumer -f TAG -m 50  -n 10.200.20.25:9988 -p -t 0%default
+// go run producer -f TAG -m 50  -n 10.200.20.25:9988 -p -t 0%default -s 128 -i 128
 func main() {
 	if len(os.Args) < 2 {
 		println("error:lack cmd name\n")
