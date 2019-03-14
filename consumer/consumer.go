@@ -324,7 +324,7 @@ func (c *consumer) Subscribe(topic string, expr string) {
 		return
 	}
 
-	c.subscribeData.PutIfAbsent(topic, BuildSubscribeData(c.GroupName, topic, expr))
+	c.subscribeData.PutIfAbsent(topic, client.BuildSubscribe(c.GroupName, topic, expr, ExprTypeTag))
 }
 
 func (c *consumer) Unsubscribe(topic string) {
@@ -547,6 +547,11 @@ func (c *consumer) processPullResponse(
 	}
 
 	return pr
+}
+
+func (c *consumer) persistAndRemoveOffset(q *message.Queue) {
+	c.offsetStorer.persistOne(q)
+	c.offsetStorer.removeOffset(q)
 }
 
 func calcStatusFromCode(code remote.Code) PullStatus {

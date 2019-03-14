@@ -157,13 +157,11 @@ func TestUpdateSubscribeVersion(t *testing.T) {
 	pc := newTestConcurrentConsumer()
 	pc.subscribeData = client.NewSubcribeTable()
 	pc.client = &fakeMQClient{}
-	pc.Subscribe("TestUpdateSubscribeVersion", subAll)
+	pc.Subscribe("TestUpdateSubscribeVersion", exprAll)
 
 	t1 := time.Now().UnixNano() / int64(time.Millisecond)
 	pc.updateSubscribeVersion("TestUpdateSubscribeVersion")
-	t2 := time.Now().UnixNano() / int64(time.Millisecond)
 	assert.True(t, t1 <= pc.subscribeData.Get("TestUpdateSubscribeVersion").Version)
-	assert.True(t, t2 <= pc.subscribeData.Get("TestUpdateSubscribeVersion").Version)
 }
 
 func TestReblance(t *testing.T) {
@@ -341,11 +339,11 @@ func TestPushPull(t *testing.T) {
 	c.State = rocketmq.StateRunning
 
 	// pause
-	c.Pause()
+	c.Suspend()
 	c.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenPause, pullService.delay)
-	c.UnPause()
+	c.Resume()
 	pullService.runSubmitLater = false
 
 	// over count threshold

@@ -85,7 +85,7 @@ func (c *PullConsumer) checkConfig() error {
 
 // Subscribe subscribe the topic dynamic
 func (c *PullConsumer) Subscribe(topic string) {
-	c.consumer.Subscribe(topic, subAll)
+	c.consumer.Subscribe(topic, exprAll)
 }
 
 func (c *PullConsumer) subscribe() {
@@ -194,7 +194,7 @@ func (c *PullConsumer) pullSync(
 		return nil, err
 	}
 
-	return c.consumer.processPullResponse(resp, q, ParseTags(expr)), nil
+	return c.consumer.processPullResponse(resp, q, client.ParseTags(expr)), nil
 }
 
 // RunningInfo returns the consumter's running information

@@ -141,8 +141,6 @@ func (cs *baseConsumeService) dropAndRemoveProcessQueue(mq *message.Queue) bool 
 	if !ok {
 		return false
 	}
-	cs.offseter.persistOne(mq)
-	cs.offseter.removeOffset(mq)
 
 	pq := (*processQueue)(unsafe.Pointer(reflect.ValueOf(v).Pointer()))
 	pq.drop()

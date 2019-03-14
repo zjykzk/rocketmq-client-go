@@ -249,7 +249,7 @@ func (c *PushConsumer) shutdownEnd() {
 
 func (c *PushConsumer) subscribeRetryTopic() {
 	if c.MessageModel == Clustering {
-		c.consumer.Subscribe(retryTopic(c.GroupName), subAll)
+		c.consumer.Subscribe(retryTopic(c.GroupName), exprAll)
 	}
 }
 
@@ -262,7 +262,7 @@ func (c *PushConsumer) updateTopicRouterInfoFromNamesrv() {
 // register the sql filter to the broker
 func (c *PushConsumer) registerFilter() {
 	for _, d := range c.subscribeData.Datas() {
-		if IsTag(d.Type) {
+		if client.IsTag(d.Type) {
 			continue
 		}
 
@@ -305,6 +305,7 @@ func (c *PushConsumer) updateProcessTableAndDispatchPullRequest(
 	// remove the mq not processed by the node
 	for _, mq := range sub(currentMQs, mqs) {
 		if c.consumeService.dropAndRemoveProcessQueue(mq) {
+			c.persistAndRemoveOffset(mq)
 			changed = true
 		}
 	}
@@ -659,7 +660,7 @@ func (c *PushConsumer) getFilterInfo(sub *client.SubscribeData) (subExpr string,
 }
 
 func (c *PushConsumer) checkVersion(broker *client.FindBrokerResult, typ string) error {
-	if IsTag(typ) {
+	if client.IsTag(typ) {
 		return nil
 	}
 
@@ -672,13 +673,13 @@ func (c *PushConsumer) checkVersion(broker *client.FindBrokerResult, typ string)
 	return nil
 }
 
-// Pause pause the consumer, this operation is thread-safe
-func (c *PushConsumer) Pause() {
+// Suspend pause the consumer, this operation is thread-safe
+func (c *PushConsumer) Suspend() {
 	atomic.StoreUint32(&c.pause, 1)
 }
 
-// UnPause un-pause the consumer, this operation is thread-safe
-func (c *PushConsumer) UnPause() {
+// Resume un-pause the consumer, this operation is thread-safe
+func (c *PushConsumer) Resume() {
 	atomic.StoreUint32(&c.pause, 0)
 }
 

@@ -118,8 +118,12 @@ func (cb *pullCallback) onOffsetIllegal(pr *PullResult) {
 	req.processQueue.drop()
 
 	cb.sched.scheduleFuncAfter(func() {
-		cb.offsetStorer.updateOffset(req.messageQueue, pr.NextBeginOffset)
-		cb.offsetStorer.persistOne(req.messageQueue)
-		cb.consumeService.dropAndRemoveProcessQueue(req.messageQueue)
+		q := req.messageQueue
+
+		cb.offsetStorer.updateOffset(q, pr.NextBeginOffset)
+		cb.offsetStorer.persistOne(q)
+		if cb.consumeService.dropAndRemoveProcessQueue(q) {
+			cb.offsetStorer.removeOffset(q)
+		}
 	}, 10*time.Second) // IGNORE ERROR
 }
