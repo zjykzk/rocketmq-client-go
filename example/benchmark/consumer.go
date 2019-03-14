@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"runtime/trace"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -110,20 +109,6 @@ func init() {
 }
 
 func (bc *bconsumer) run(args []string) {
-	var err error
-	// setup trace
-	f, err := os.Create("consume-trace.out")
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	err = trace.Start(f)
-	if err != nil {
-		panic(err)
-	}
-	defer trace.Stop()
-
 	bc.flags.Parse(args)
 	if bc.topic == "" {
 		println("empty topic")

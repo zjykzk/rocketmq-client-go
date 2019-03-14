@@ -24,7 +24,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"runtime/trace"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -166,20 +165,6 @@ AGAIN:
 }
 
 func (bp *bproducer) run(args []string) {
-	var err error
-	// setup trace
-	f, err := os.Create("produce-trace.out")
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	err = trace.Start(f)
-	if err != nil {
-		panic(err)
-	}
-	defer trace.Stop()
-
 	bp.flags.Parse(args)
 
 	if bp.topic == "" {
