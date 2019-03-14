@@ -70,12 +70,12 @@ func (rs *remoteStore) updateQueues(qs ...*message.Queue) {
 	}
 
 	curQueues, _ := rs.queuesAndOffsets()
-CMP:
+NEXT:
 	for i := range curQueues {
 		q := &curQueues[i]
 		for _, q1 := range qs {
 			if *q == *q1 {
-				continue CMP
+				continue NEXT
 			}
 		}
 		rs.removeOffset(q)

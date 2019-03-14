@@ -196,11 +196,14 @@ func (c *PushConsumer) start() error {
 
 	c.Shutdowner = shutdowner
 
+	c.logger.Infof("start pull consumer:%s success", c.GroupName)
+	// HACK: to speedup the boot time
+	c.State = rocketmq.StateRunning
+
 	c.updateTopicRouterInfoFromNamesrv()
 	c.registerFilter()
 	c.client.SendHeartbeat()
 	c.ReblanceQueue()
-	c.logger.Infof("start pull consumer:%s success", c.GroupName)
 	return nil
 }
 

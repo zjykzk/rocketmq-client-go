@@ -139,7 +139,9 @@ func (bc *bconsumer) run(args []string) {
 		groupID += fmt.Sprintf("_%d", time.Now().UnixNano()/int64(time.Millisecond)%100)
 	}
 
-	logger, err := newLogger("bc.log")
+	groupID = "tw0000000000000000006"
+
+	logger, err := newLogger(os.Getenv("ID") + "_bc.log")
 	if err != nil {
 		fmt.Printf("new logger error:%s\n", err)
 		return

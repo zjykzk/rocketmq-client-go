@@ -190,12 +190,6 @@ func (bs *baseStore) queuesAndOffsets() (queues []message.Queue, offsets []int64
 
 func (bs *baseStore) updateOffset(q *message.Queue, offset int64) {
 	bs.updateOffset0(q, offset, false)
-
-	_, ok := bs.readOffsetFromMemory(q)
-	if !ok {
-		fmt.Printf("queue:%s %v\n", q, bs.Offsets)
-		panic("why")
-	}
 }
 
 func (bs *baseStore) updateOffsetIfGreater(q *message.Queue, offset int64) {
