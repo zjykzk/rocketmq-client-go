@@ -339,7 +339,7 @@ func TestPushPull(t *testing.T) {
 	c.State = rocketmq.StateRunning
 
 	// pause
-	c.Suspend()
+	c.Pause()
 	c.pull(pr)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenPause, pullService.delay)

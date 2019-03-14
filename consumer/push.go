@@ -676,8 +676,8 @@ func (c *PushConsumer) checkVersion(broker *client.FindBrokerResult, typ string)
 	return nil
 }
 
-// Suspend pause the consumer, this operation is thread-safe
-func (c *PushConsumer) Suspend() {
+// Pause pause the consumer, this operation is thread-safe
+func (c *PushConsumer) Pause() {
 	atomic.StoreUint32(&c.pause, 1)
 }
 
