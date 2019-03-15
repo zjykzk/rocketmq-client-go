@@ -169,4 +169,10 @@ func bakPath(path string) string {
 	return path + ".bak"
 }
 
-func (ls *localStore) persistOne(mq *message.Queue) {}
+func (ls *localStore) persistOne(mq *message.Queue) {
+	// DO NOTHING
+}
+func (ls *localStore) removeOffset(mq *message.Queue) (offset int64, ok bool) {
+	// DO NOTHING
+	return
+}

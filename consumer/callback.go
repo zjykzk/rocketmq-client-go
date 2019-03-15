@@ -119,7 +119,9 @@ func (cb *pullCallback) onOffsetIllegal(pr *PullResult) {
 
 	cb.sched.scheduleFuncAfter(func() {
 		q := req.messageQueue
-		cb.logger.Infof("fix the offset %s, offset %d", q, pr.NextBeginOffset)
+		cb.logger.Infof(
+			"fix the offset %s, current offset %d, next offset %d", q, req.nextOffset, pr.NextBeginOffset,
+		)
 
 		cb.offsetStorer.updateOffset(q, pr.NextBeginOffset)
 		cb.offsetStorer.persistOne(q)
