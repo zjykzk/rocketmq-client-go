@@ -30,8 +30,8 @@ const (
 	getConsumerListByGroup                       = 38
 	CheckTransactionState                        = 39
 	NotifyConsumerIdsChanged                     = 40
-	lockBatchMq                                  = 41
-	unlockBatchMq                                = 42
+	lockBatchMQ                                  = 41
+	unlockBatchMQ                                = 42
 	getAllConsumerOffset                         = 43
 	getAllDelayOffset                            = 45
 	checkClientConfig                            = 46

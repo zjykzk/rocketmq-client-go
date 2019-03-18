@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
@@ -108,4 +109,22 @@ func (c *MQClient) PullMessageAsync(
 	addr string, header *rpc.PullHeader, to time.Duration, callback func(*rpc.PullResponse, error),
 ) error {
 	return rpc.PullMessageAsync(c.Client, addr, header, to, callback)
+}
+
+// LockMessageQueues send lock message queue request to the broker
+func (c *MQClient) LockMessageQueues(broker, group string, queues []message.Queue, to time.Duration) error {
+	r, err := c.FindBrokerAddr(broker, rocketmq.MasterID, true)
+	if err != nil {
+		return err
+	}
+	return rpc.LockMessageQueues(c.Client, r.Addr, group, c.clientID, queues, to)
+}
+
+// UnlockMessageQueuesOneway send unlock message queue request to the broker
+func (c *MQClient) UnlockMessageQueuesOneway(group, broker string, queues []message.Queue) error {
+	r, err := c.FindBrokerAddr(broker, rocketmq.MasterID, true)
+	if err != nil {
+		return err
+	}
+	return rpc.UnlockMessageQueuesOneway(c.Client, r.Addr, group, c.clientID, queues)
 }
