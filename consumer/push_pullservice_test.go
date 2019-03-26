@@ -67,7 +67,7 @@ func TestSubmitRequestLater(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ps.submitRequestLater(&pullRequest{}, time.Second)
+	ps.submitRequestLater(&pullRequest{messageQueue: &message.Queue{}}, time.Second)
 	assert.Equal(t, 1, len(ps.sched.queue.tasks()))
 }
 

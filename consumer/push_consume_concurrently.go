@@ -113,13 +113,10 @@ func newConsumeConcurrentlyService(conf concurrentlyServiceConfig) (
 		consumeLaterInterval: time.Second,
 	}
 
-	pc.baseConsumeService.oldMessageQueueRemover = pc.dropAndRemoveProcessQueue
-
 	return pc, nil
 }
 
 func (cs *consumeConcurrentlyService) start() {
-	cs.baseConsumeService.start()
 	cs.startFunc(cs.clearExpiredMessage, cs.cleanExpiredInterval)
 	cs.startConsume()
 	cs.logger.Info("consume concurrently STARTED")

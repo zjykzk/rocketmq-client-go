@@ -97,10 +97,6 @@ func (pq *processQueue) updatePullTime(t time.Time) {
 	pq.lastPullTime = t
 }
 
-func (pq *processQueue) isPullExpired(timeout time.Duration) bool {
-	return time.Since(pq.lastPullTime) >= timeout
-}
-
 func getConsumeStartTime(m *message.Ext) int64 {
 	v := m.GetProperty(message.PropertyConsumeStartTimestamp)
 	i, _ := strconv.ParseInt(v, 10, 64)

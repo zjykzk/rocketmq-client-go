@@ -52,32 +52,3 @@ func TestRemoveOldMessageQueue(t *testing.T) {
 	assert.True(t, cs.dropAndRemoveProcessQueue(mq))
 	assert.False(t, cs.dropAndRemoveProcessQueue(mq))
 }
-
-type fakeProcessQueue struct {
-	processQueue
-
-	other int
-}
-
-func TestDropExpiredProcessQueue(t *testing.T) {
-	cs := newTestConsumeService(t)
-	cs.processQueues.Store(message.Queue{}, &fakeProcessQueue{})
-	cs.processQueues.Store(message.Queue{QueueID: 1}, &fakeProcessQueue{
-		processQueue{lastPullTime: time.Now().Add(time.Second)},
-		1,
-	})
-
-	count := 0
-	counter := func() {
-		count = 0
-		cs.processQueues.Range(func(_, _ interface{}) bool { count++; return true })
-	}
-
-	counter()
-	assert.Equal(t, 2, count)
-
-	cs.dropExpiredProcessQueues()
-
-	counter()
-	assert.Equal(t, 1, count)
-}

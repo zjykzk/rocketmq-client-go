@@ -20,11 +20,10 @@ type messageSendBack interface {
 }
 
 type baseConsumeService struct {
-	group                  string
-	messageModel           Model
-	messageSendBack        messageSendBack
-	offseter               offsetStorer
-	oldMessageQueueRemover func(*message.Queue) bool
+	group           string
+	messageModel    Model
+	messageSendBack messageSendBack
+	offseter        offsetStorer
 
 	processQueues       sync.Map
 	pullExpiredInterval time.Duration
@@ -37,13 +36,12 @@ type baseConsumeService struct {
 }
 
 type consumeServiceConfig struct {
-	group                  string
-	schedWorkerCount       int
-	messageModel           Model
-	messageSendBack        messageSendBack
-	offseter               offsetStorer
-	oldMessageQueueRemover func(*message.Queue) bool
-	logger                 log.Logger
+	group            string
+	schedWorkerCount int
+	messageModel     Model
+	messageSendBack  messageSendBack
+	offseter         offsetStorer
+	logger           log.Logger
 }
 
 func newConsumeService(conf consumeServiceConfig) (*baseConsumeService, error) {
@@ -68,20 +66,15 @@ func newConsumeService(conf consumeServiceConfig) (*baseConsumeService, error) {
 	}
 
 	c := &baseConsumeService{
-		group:                  conf.group,
-		messageModel:           conf.messageModel,
-		messageSendBack:        conf.messageSendBack,
-		scheduler:              newScheduler(conf.schedWorkerCount),
-		offseter:               conf.offseter,
-		oldMessageQueueRemover: conf.oldMessageQueueRemover,
-		pullExpiredInterval:    defaultPullExpiredInterval,
+		group:               conf.group,
+		messageModel:        conf.messageModel,
+		messageSendBack:     conf.messageSendBack,
+		scheduler:           newScheduler(conf.schedWorkerCount),
+		offseter:            conf.offseter,
+		pullExpiredInterval: defaultPullExpiredInterval,
 
 		exitChan: make(chan struct{}),
 		logger:   conf.logger,
-	}
-
-	if c.oldMessageQueueRemover == nil {
-		c.oldMessageQueueRemover = c.dropAndRemoveProcessQueue
 	}
 
 	return c, nil
@@ -113,10 +106,6 @@ func (cs *baseConsumeService) startFunc(f func(), period time.Duration) {
 	}()
 }
 
-func (cs *baseConsumeService) start() {
-	cs.startFunc(cs.dropExpiredProcessQueues, time.Second*10)
-}
-
 func (cs *baseConsumeService) shutdown() {
 	cs.logger.Info("shutdown base consume sevice START")
 	close(cs.exitChan)
@@ -146,19 +135,4 @@ func (cs *baseConsumeService) dropAndRemoveProcessQueue(mq *message.Queue) bool 
 	pq.drop()
 	cs.processQueues.Delete(*mq)
 	return true
-}
-
-func (cs *baseConsumeService) dropExpiredProcessQueues() {
-	cs.processQueues.Range(func(k, v interface{}) bool {
-		pq := (*processQueue)(unsafe.Pointer(reflect.ValueOf(v).Pointer()))
-		if !pq.isPullExpired(cs.pullExpiredInterval) {
-			return true // next
-		}
-
-		mq := k.(message.Queue)
-		if cs.oldMessageQueueRemover(&mq) {
-			cs.processQueues.Delete(k)
-		}
-		return true
-	})
 }
