@@ -307,8 +307,8 @@ func (c *PushConsumer) updateProcessTableAndDispatchPullRequest(
 	changed := false
 	// remove the mq not processed by the node
 	for _, mq := range sub(currentMQs, mqs) {
+		c.persistAndRemoveOffset(mq)
 		if c.consumeService.dropAndRemoveProcessQueue(mq) {
-			c.persistAndRemoveOffset(mq)
 			changed = true
 		}
 	}

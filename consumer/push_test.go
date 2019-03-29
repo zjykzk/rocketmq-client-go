@@ -325,14 +325,14 @@ func TestPushPull(t *testing.T) {
 	pq := pr.processQueue
 	pq.drop()
 	c.pull(pr)
-	assert.True(t, pq.lastPullTime.IsZero())
+	assert.Equal(t, int64(0), pq.lastPullTime)
 	pq.dropped = normal
 
 	// bad state
 	pullService := c.pullService.(*fakePullRequestDispatcher)
 	c.State = rocketmq.StateCreating
 	c.pull(pr)
-	assert.False(t, pq.lastPullTime.IsZero(), pq.lastPullTime)
+	assert.False(t, pq.lastPullTime == 0, pq.lastPullTime)
 	assert.True(t, pullService.runSubmitLater)
 	assert.Equal(t, PullTimeDelayWhenException, pullService.delay)
 	pullService.runSubmitLater = false

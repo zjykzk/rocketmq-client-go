@@ -139,6 +139,8 @@ func (bc *bconsumer) run(args []string) {
 		groupID += fmt.Sprintf("_%d", time.Now().UnixNano()/int64(time.Millisecond)%100)
 	}
 
+	groupID = "xxxxxxxxx1"
+
 	logger, err := newLogger(os.Getenv("ID") + "_bc.log")
 	if err != nil {
 		fmt.Printf("new logger error:%s\n", err)
@@ -151,6 +153,7 @@ func (bc *bconsumer) run(args []string) {
 		groupID, strings.Split(bc.nameSrv, ","), &concurrentlyConsumer{stati: &stati}, logger,
 	)
 	c.FromWhere = consumer.ConsumeFromFirstOffset
+	c.MessageModel = consumer.Clustering
 	if err != nil {
 		fmt.Printf("new push cosnumer error:%s\n", err)
 		return

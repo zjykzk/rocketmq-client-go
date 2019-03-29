@@ -21,9 +21,10 @@ const (
 
 type offsets struct {
 	sync.RWMutex `json:"-"`
-
-	Broker        string                `json:"broker"`          // readlony
-	OffsetOfTopic [256]map[string]int64 `json:"offset_of_topic"` // index is the queue id, and map contains (topic, offset) paire
+	Broker       string `json:"broker"`
+	// index is the queue id, and map contains (topic, offset) paire
+	// the offset is begin point to be pulled
+	OffsetOfTopic [256]map[string]int64 `json:"offset_of_topic"`
 }
 
 func newOffsets(broker string) *offsets {

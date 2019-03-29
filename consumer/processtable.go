@@ -36,7 +36,7 @@ type processQueue struct {
 	nextQueueOffset int64
 	messages        tree.LLRBTree // queue offset -> message
 
-	lastPullTime time.Time
+	lastPullTime int64 // unixnano
 }
 
 func newProcessQueue() *processQueue {
@@ -94,7 +94,7 @@ func (pq *processQueue) isDropped() bool {
 }
 
 func (pq *processQueue) updatePullTime(t time.Time) {
-	pq.lastPullTime = t
+	atomic.StoreInt64(&pq.lastPullTime, t.UnixNano())
 }
 
 func getConsumeStartTime(m *message.Ext) int64 {

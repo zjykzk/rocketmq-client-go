@@ -12,6 +12,10 @@ func newTimeoutLocker() *timeoutLocker {
 	}
 }
 
+func (l *timeoutLocker) lock() {
+	l.sem <- struct{}{}
+}
+
 func (l *timeoutLocker) tryLock(timeout time.Duration) bool {
 	timer := time.NewTimer(timeout)
 	select {
