@@ -320,14 +320,14 @@ func (cs *consumeOrderlyService) consume(r *consumeOrderlyRequest) {
 			break
 		}
 
-		if !cs.continueProcess(r, start) {
+		if !cs.canContinue(r, start) {
 			cs.lockAndConsumeLater(r, 10*time.Millisecond)
 			break
 		}
 	}
 }
 
-func (cs *consumeOrderlyService) continueProcess(r *consumeOrderlyRequest, start time.Time) bool {
+func (cs *consumeOrderlyService) canContinue(r *consumeOrderlyRequest, start time.Time) bool {
 	pq, mq := r.processQueue, r.messageQueue
 
 	isClustering := cs.messageModel == Clustering
