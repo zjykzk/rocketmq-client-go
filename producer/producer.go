@@ -216,6 +216,25 @@ func (p *Producer) NeedUpdateTopicPublish(topic string) bool {
 	return pi != nil && !pi.hasQueue()
 }
 
+// SendSyncWithSelector send the message sync with the message queue selector
+func (p *Producer) SendSyncWithSelector(
+	m *message.Message, s MessageQueueSelector, arg interface{},
+) (
+	sendResult *SendResult, err error,
+) {
+	err = p.CheckRunning()
+	if err != nil {
+		return
+	}
+
+	return p.sendSync(
+		&messageWrap{Message: m, isBatch: false},
+		func(pub *topicPublishInfo, m *messageWrap, sysFlag int32) (*SendResult, error) {
+			return p.sendMessageWithQueueSync(m, s.Select(pub.MessageQueues(), m.Message, arg), sysFlag)
+		},
+	)
+}
+
 // SendSync sends the message
 // the message must not be nil
 func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err error) {
@@ -224,7 +243,7 @@ func (p *Producer) SendSync(m *message.Message) (sendResult *SendResult, err err
 		return
 	}
 
-	return p.sendSync(&messageWrap{Message: m})
+	return p.sendSync(&messageWrap{Message: m}, p.sendMessageWithLatency)
 }
 
 type messageWrap struct {
@@ -232,8 +251,11 @@ type messageWrap struct {
 	isBatch bool
 }
 
-func (p *Producer) sendSync(m *messageWrap) (sendResult *SendResult, err error) {
-
+func (p *Producer) sendSync(
+	m *messageWrap, send func(*topicPublishInfo, *messageWrap, int32) (*SendResult, error),
+) (
+	sendResult *SendResult, err error,
+) {
 	err = p.checkMessage(m.Message)
 	if err != nil {
 		return
@@ -256,7 +278,7 @@ func (p *Producer) sendSync(m *messageWrap) (sendResult *SendResult, err error) 
 	}
 
 	m.SetUniqID(message.CreateUniqID())
-	sendResult, err = p.sendMessageWithLatency(routers, m, sysFlag)
+	sendResult, err = send(routers, m, sysFlag)
 
 	m.Body = originBody
 
@@ -466,5 +488,5 @@ func (p *Producer) SendBatchSync(batch *message.Batch) (sendResult *SendResult, 
 		return
 	}
 
-	return p.sendSync(&messageWrap{Message: m, isBatch: true})
+	return p.sendSync(&messageWrap{Message: m, isBatch: true}, p.sendMessageWithLatency)
 }

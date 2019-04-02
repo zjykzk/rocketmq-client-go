@@ -77,6 +77,42 @@ type PushConsumer struct {
 	pullService pullRequestDispatcher
 }
 
+// NewOrderlyConsumer creates the push consumer consuming the message orderly
+func NewOrderlyConsumer(
+	group string, namesrvAddrs []string, userConsumer OrderlyConsumer, logger log.Logger,
+) (
+	c *PushConsumer, err error,
+) {
+	if userConsumer == nil {
+		return nil, errors.New("empty consumer service")
+	}
+	c = newPushConsumer(group, namesrvAddrs, logger)
+
+	c.consumeServiceBuilder = func() (consumeService, error) {
+		cs, err := newConsumeOrderlyService(orderlyServiceConfig{
+			consumeServiceConfig: consumeServiceConfig{
+				group:           group,
+				logger:          logger,
+				messageSendBack: c,
+				offseter:        c.offsetStorer,
+			},
+			mqLocker:     c,
+			messageModel: Clustering,
+			consumer:     userConsumer,
+			batchSize:    c.consumeBatchSize,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		cs.start()
+		c.insertConsumeServiceShutdownFront(cs.shutdown)
+
+		return cs, nil
+	}
+	return
+}
+
 // NewConcurrentConsumer creates the push consumer consuming the message concurrently
 func NewConcurrentConsumer(
 	group string, namesrvAddrs []string, userConsumer ConcurrentlyConsumer, logger log.Logger,
@@ -105,12 +141,8 @@ func NewConcurrentConsumer(
 		}
 
 		cs.start()
+		c.insertConsumeServiceShutdownFront(cs.shutdown)
 
-		shutdowner := &rocketmq.ShutdownCollection{}
-		shutdowner.AddFirstFuncs(cs.shutdown)
-		shutdowner.AddLast(c.Shutdowner)
-
-		c.Shutdowner = shutdowner
 		return cs, nil
 	}
 	return
@@ -154,6 +186,14 @@ func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 
 	c.StartFunc = c.start
 	return c
+}
+
+func (c *PushConsumer) insertConsumeServiceShutdownFront(shutdownFunc func()) {
+	shutdowner := &rocketmq.ShutdownCollection{}
+	shutdowner.AddFirstFuncs(shutdownFunc)
+	shutdowner.AddLast(c.Shutdowner)
+
+	c.Shutdowner = shutdowner
 }
 
 func (c *PushConsumer) start() error {
@@ -688,4 +728,14 @@ func (c *PushConsumer) Resume() {
 
 func (c *PushConsumer) isPause() bool {
 	return atomic.LoadUint32(&c.pause) == 1
+}
+
+// Lock locks the message queues in the broker
+func (c *PushConsumer) Lock(broker string, mqs []message.Queue) ([]message.Queue, error) {
+	return c.client.LockMessageQueues(broker, c.GroupName, mqs, time.Second)
+}
+
+// Unlock unlocks the message queue in the broker
+func (c *PushConsumer) Unlock(mq message.Queue) error {
+	return c.client.UnlockMessageQueuesOneway(c.GroupName, mq.BrokerName, []message.Queue{mq})
 }

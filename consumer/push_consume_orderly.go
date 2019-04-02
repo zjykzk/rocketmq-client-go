@@ -299,7 +299,7 @@ func (cs *consumeOrderlyService) consume(r *consumeOrderlyRequest) {
 
 		pq.lockConsume()
 		if pq.isDropped() { // the lock operation may supsend the current goroutine
-			cs.logger.Infof("[%s] process queue is DROPPED, give up the consuming", mq)
+			cs.logger.Infof("[%s] process queue is DROPPED after consume locker", mq)
 			pq.unLockConsume()
 			break
 		}
@@ -320,14 +320,34 @@ func (cs *consumeOrderlyService) consume(r *consumeOrderlyRequest) {
 			break
 		}
 
-		if !cs.canContinue(r, start) {
+		if !cs.isLockedInBroker(r, start) {
 			cs.lockAndConsumeLater(r, 10*time.Millisecond)
+			break
+		}
+
+		consumeTime := time.Since(start)
+		if consumeTime >= cs.maxConsumeContinuouslyTime {
+			cs.logger.Infof(
+				"[%s] CONSUME TOO LONG %s, max:%s, try later", consumeTime, cs.maxConsumeContinuouslyTime, mq,
+			)
+			cs.submitRequestLater(r, 10*time.Millisecond)
 			break
 		}
 	}
 }
 
-func (cs *consumeOrderlyService) canContinue(r *consumeOrderlyRequest, start time.Time) bool {
+func (cs *consumeOrderlyService) lockAndConsumeLater(r *consumeOrderlyRequest, delay time.Duration) {
+	cs.scheduler.scheduleFuncAfter(func() {
+		mqs, err := cs.mqLocker.Lock(r.messageQueue.BrokerName, []message.Queue{*r.messageQueue})
+		delay := 3 * time.Second // delay for the process queue is filled with message
+		if len(mqs) == 1 && err == nil {
+			delay = 10 * time.Millisecond
+		}
+		cs.submitRequestLater(r, delay)
+	}, delay)
+}
+
+func (cs *consumeOrderlyService) isLockedInBroker(r *consumeOrderlyRequest, start time.Time) bool {
 	pq, mq := r.processQueue, r.messageQueue
 
 	isClustering := cs.messageModel == Clustering
@@ -341,26 +361,7 @@ func (cs *consumeOrderlyService) canContinue(r *consumeOrderlyRequest, start tim
 		return false
 	}
 
-	consumeTime := time.Since(start)
-	if consumeTime >= cs.maxConsumeContinuouslyTime {
-		cs.logger.Infof(
-			"[%s] CONSUME TOO LONG %s, max:%s, try later", consumeTime, cs.maxConsumeContinuouslyTime, mq,
-		)
-		return false
-	}
-
 	return true
-}
-
-func (cs *consumeOrderlyService) lockAndConsumeLater(r *consumeOrderlyRequest, delay time.Duration) {
-	cs.scheduler.scheduleFuncAfter(func() {
-		mqs, err := cs.mqLocker.Lock(r.messageQueue.BrokerName, []message.Queue{*r.messageQueue})
-		delay := 3 * time.Second // delay for the process queue is filled with message
-		if len(mqs) == 1 && err == nil {
-			delay = 10 * time.Millisecond
-		}
-		cs.submitRequestLater(r, delay)
-	}, delay)
 }
 
 func (cs *consumeOrderlyService) submitRequestLater(r *consumeOrderlyRequest, delay time.Duration) {
@@ -481,6 +482,15 @@ func (cs *consumeOrderlyService) incReconsumeTimesIfNotOverLimit(msgs []*message
 		}
 	}
 	return
+}
+
+func (cs *consumeOrderlyService) submitConsumeRequest(
+	_ []*message.Ext, pq *processQueue, mq *message.Queue,
+) {
+	cs.submitRequest(&consumeOrderlyRequest{
+		processQueue: (*orderProcessQueue)(unsafe.Pointer(pq)),
+		messageQueue: mq,
+	})
 }
 
 func newOrderProcessQueue() *orderProcessQueue {

@@ -446,23 +446,29 @@ type lockRequest struct {
 	Queues   []message.Queue `json:"mqSet"`
 }
 
+type lockResponse struct {
+	Queues []message.Queue `json:"lockOKMQSet"`
+}
+
 // LockMessageQueues send lock message queue request to the broker
 func LockMessageQueues(
 	client remote.Client, addr string, group, clientID string, queues []message.Queue, to time.Duration,
-) error {
+) ([]message.Queue, error) {
 	d, _ := json.Marshal(&lockRequest{Group: group, ClientID: clientID, Queues: queues})
 	cmd, err := client.RequestSync(
 		addr, remote.NewCommandWithBody(lockBatchMQ, nil, d), to,
 	)
 	if err != nil {
-		return requestError(err)
+		return nil, requestError(err)
 	}
 
 	if cmd.Code != Success {
-		return brokerError(cmd)
+		return nil, brokerError(cmd)
 	}
 
-	return nil
+	var resp lockResponse
+	err = json.Unmarshal(cmd.Body, &resp)
+	return resp.Queues, err
 }
 
 // UnlockMessageQueuesOneway send unlock message queue request to the broker

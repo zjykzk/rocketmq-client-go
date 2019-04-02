@@ -5,6 +5,7 @@ import (
 
 	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/client/rpc"
+	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
 type mqClient interface {
@@ -25,4 +26,6 @@ type mqClient interface {
 	SearchOffsetByTimestamp(addr, topic string, queueID uint8, timestamp time.Time, to time.Duration) (int64, *rpc.Error)
 	SendHeartbeat()
 	RegisterFilter(group string, subData *client.SubscribeData) error
+	LockMessageQueues(broker, group string, queues []message.Queue, to time.Duration) ([]message.Queue, error)
+	UnlockMessageQueuesOneway(group, broker string, queues []message.Queue) error
 }

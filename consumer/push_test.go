@@ -326,7 +326,7 @@ func TestPushPull(t *testing.T) {
 	pq.drop()
 	c.pull(pr)
 	assert.Equal(t, int64(0), pq.lastPullTime)
-	pq.dropped = normal
+	pq.dropped = processQueueStateNormal
 
 	// bad state
 	pullService := c.pullService.(*fakePullRequestDispatcher)
