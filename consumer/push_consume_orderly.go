@@ -186,12 +186,25 @@ func (cs *consumeOrderlyService) getMQsGroupByBroker() []mqsOfBroker {
 func (cs *consumeOrderlyService) insertNewMessageQueue(mq *message.Queue) (
 	pq *processQueue, ok bool,
 ) {
+	lockedMQs, err := cs.mqLocker.Lock(mq.BrokerName, []message.Queue{*mq})
+	if err != nil {
+		cs.logger.Errorf("lock the message queue:%s, error:%s", mq, err)
+		return nil, false
+	}
+
+	if len(lockedMQs) == 0 {
+		cs.logger.Errorf("lock the message queue:%s failed", mq)
+		return nil, false
+	}
+
 	cpq := newOrderProcessQueue()
 	_, ok = cs.processQueues.LoadOrStore(*mq, cpq)
 	if ok {
 		cs.logger.Infof("message queue:%s exist", mq)
 		return nil, false
 	}
+
+	cpq.lockInBroker(time.Now().UnixNano())
 	return &cpq.processQueue, true
 }
 

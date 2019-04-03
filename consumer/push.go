@@ -113,8 +113,8 @@ func NewOrderlyConsumer(
 	return
 }
 
-// NewConcurrentConsumer creates the push consumer consuming the message concurrently
-func NewConcurrentConsumer(
+// NewConcurrentlyConsumer creates the push consumer consuming the message concurrently
+func NewConcurrentlyConsumer(
 	group string, namesrvAddrs []string, userConsumer ConcurrentlyConsumer, logger log.Logger,
 ) (
 	c *PushConsumer, err error,

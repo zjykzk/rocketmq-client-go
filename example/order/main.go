@@ -47,6 +47,8 @@ func main() {
 
 	if isProducer {
 		runProucer()
+	} else {
+		runConsumer()
 	}
 }
 

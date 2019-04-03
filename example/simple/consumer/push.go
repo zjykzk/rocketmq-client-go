@@ -10,9 +10,7 @@ import (
 
 type simpleConsumer struct{}
 
-func (c *simpleConsumer) Consume(
-	msgs []*message.Ext, ctx *consumer.ConcurrentlyContext,
-) consumer.ConsumeConcurrentlyStatus {
+func (c *simpleConsumer) Consume(msgs []*message.Ext, ctx *consumer.ConcurrentlyContext) consumer.ConsumeConcurrentlyStatus {
 	fmt.Printf("receive new message:%s\n", msgs)
 	return consumer.ConcurrentlySuccess
 }
@@ -24,7 +22,7 @@ func runPush() {
 		return
 	}
 
-	c, err := consumer.NewConcurrentConsumer(
+	c, err := consumer.NewConcurrentlyConsumer(
 		"example-group", strings.Split(namesrvAddrs, ","), &simpleConsumer{}, logger,
 	)
 	if err != nil {

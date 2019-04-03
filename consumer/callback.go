@@ -65,6 +65,7 @@ func (cb *pullCallback) onFound(pr *PullResult) {
 	}
 
 	cb.statiTPS()
+	req.processQueue.putMessages(pr.Messages)
 	cb.consumeService.submitConsumeRequest(pr.Messages, req.processQueue, req.messageQueue)
 	if cb.pullInterval <= 0 {
 		cb.pullService.submitRequestImmediately(req)

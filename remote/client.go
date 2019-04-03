@@ -129,12 +129,14 @@ func (c *client) putCallbackFuture(
 	c.futureLocker.Unlock()
 	return f
 }
+
 func (c *client) RequestOneway(addr string, cmd *Command) error {
 	ch, err := c.getChannel(addr)
 	if err != nil {
 		return err
 	}
 
+	cmd.markOneway()
 	if err := ch.SendSync(cmd); err != nil {
 		c.logger.Errorf("send message [%d] sync error:%v", cmd.ID(), err)
 		return err
@@ -203,7 +205,7 @@ func (c *client) OnMessage(ctx *ChannelContext, cmd *Command) {
 	c.futureLocker.Unlock()
 
 	c.logger.Debugf("[%d] processed by response future", id)
-	if !ok {
+	if !ok && !cmd.IsOneway() {
 		c.logger.Errorf("message [%d] LOST: %v", id, cmd)
 		return
 	}

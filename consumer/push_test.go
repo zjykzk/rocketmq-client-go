@@ -31,7 +31,7 @@ func (d *fakePullRequestDispatcher) submitRequestLater(r *pullRequest, delay tim
 }
 
 func newTestConcurrentConsumer() *PushConsumer {
-	pc, err := NewConcurrentConsumer(
+	pc, err := NewConcurrentlyConsumer(
 		"test-push-consumer", []string{"dummy"}, &fakeConcurrentlyConsumer{}, log.Std,
 	)
 	pc.client = &fakeMQClient{}
