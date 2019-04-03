@@ -29,7 +29,7 @@ const (
 	defaultPostSubscriptionWhenPull   bool          = false
 	defaultConsumeTimeout                           = 15 * time.Minute
 	defaultConsumeMessageBatchMaxSize               = 1
-	defaultPushMaxReconsumeTimes                    = -1
+	defaultPushMaxReconsumeTimes                    = (1 << 32) - 1
 )
 
 // times defined
@@ -96,10 +96,11 @@ func NewOrderlyConsumer(
 				messageSendBack: c,
 				offseter:        c.offsetStorer,
 			},
-			mqLocker:     c,
-			messageModel: Clustering,
-			consumer:     userConsumer,
-			batchSize:    c.consumeBatchSize,
+			mqLocker:          c,
+			messageModel:      Clustering,
+			consumer:          userConsumer,
+			batchSize:         c.consumeBatchSize,
+			maxReconsumeTimes: c.maxReconsumeTimes,
 		})
 		if err != nil {
 			return nil, err
