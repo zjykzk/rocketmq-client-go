@@ -9,22 +9,22 @@ import (
 
 // SubscribeQueueTable contains the message queues of topic, the operations is thread-safe
 type SubscribeQueueTable struct {
-	locker sync.RWMutex
-	table  map[string][]*message.Queue // key: topic
+	locker        sync.RWMutex
+	queuesOfTopic map[string][]*message.Queue // key: topic
 }
 
 // NewSubscribeQueueTable creates the QueueTable
 func NewSubscribeQueueTable() *SubscribeQueueTable {
 	return &SubscribeQueueTable{
-		table: make(map[string][]*message.Queue, 128),
+		queuesOfTopic: make(map[string][]*message.Queue, 128),
 	}
 }
 
 // Put stores the queues and returns the previous queue
 func (t *SubscribeQueueTable) Put(topic string, q []*message.Queue) []*message.Queue {
 	t.locker.Lock()
-	prev := t.table[topic]
-	t.table[topic] = q
+	prev := t.queuesOfTopic[topic]
+	t.queuesOfTopic[topic] = q
 	t.locker.Unlock()
 	return prev
 }
@@ -32,7 +32,7 @@ func (t *SubscribeQueueTable) Put(topic string, q []*message.Queue) []*message.Q
 // Get returns the queues of the topic
 func (t *SubscribeQueueTable) Get(topic string) []*message.Queue {
 	t.locker.RLock()
-	queues := t.table[topic]
+	queues := t.queuesOfTopic[topic]
 	t.locker.RUnlock()
 	return queues
 }
@@ -41,8 +41,8 @@ func (t *SubscribeQueueTable) Get(topic string) []*message.Queue {
 func (t *SubscribeQueueTable) Topics() []string {
 	i := 0
 	t.locker.RLock()
-	topics := make([]string, len(t.table))
-	for k := range t.table {
+	topics := make([]string, len(t.queuesOfTopic))
+	for k := range t.queuesOfTopic {
 		topics[i] = k
 		i++
 	}
@@ -53,9 +53,9 @@ func (t *SubscribeQueueTable) Topics() []string {
 // Delete returns the topics
 func (t *SubscribeQueueTable) Delete(topic string) []*message.Queue {
 	t.locker.Lock()
-	prev, ok := t.table[topic]
+	prev, ok := t.queuesOfTopic[topic]
 	if ok {
-		delete(t.table, topic)
+		delete(t.queuesOfTopic, topic)
 	}
 	t.locker.Unlock()
 	return prev
@@ -132,22 +132,22 @@ func (s *SubscribeData) String() string {
 // SubscribeDataTable contains the subscription information of topic, the operations is thread-safe
 // NOTE: donot modify directly
 type SubscribeDataTable struct {
-	locker sync.RWMutex
-	table  map[string]*SubscribeData // key: topic
+	locker     sync.RWMutex
+	subOfTopic map[string]*SubscribeData // key: topic
 }
 
 // NewSubcribeTable creates one DataTable
 func NewSubcribeTable() *SubscribeDataTable {
 	return &SubscribeDataTable{
-		table: make(map[string]*SubscribeData, 8),
+		subOfTopic: make(map[string]*SubscribeData, 8),
 	}
 }
 
 // Put stores the subcribe data and returns the previous one
 func (t *SubscribeDataTable) Put(topic string, d *SubscribeData) *SubscribeData {
 	t.locker.Lock()
-	prev := t.table[topic]
-	t.table[topic] = d
+	prev := t.subOfTopic[topic]
+	t.subOfTopic[topic] = d
 	t.locker.Unlock()
 	return prev
 }
@@ -155,9 +155,9 @@ func (t *SubscribeDataTable) Put(topic string, d *SubscribeData) *SubscribeData 
 // PutIfAbsent stores the subcribe data and returns the previous one
 func (t *SubscribeDataTable) PutIfAbsent(topic string, d *SubscribeData) *SubscribeData {
 	t.locker.Lock()
-	prev, ok := t.table[topic]
+	prev, ok := t.subOfTopic[topic]
 	if !ok {
-		t.table[topic] = d
+		t.subOfTopic[topic] = d
 	}
 	t.locker.Unlock()
 	return prev
@@ -166,7 +166,7 @@ func (t *SubscribeDataTable) PutIfAbsent(topic string, d *SubscribeData) *Subscr
 // Get returns the subcribe data of the topic
 func (t *SubscribeDataTable) Get(topic string) *SubscribeData {
 	t.locker.RLock()
-	d := t.table[topic]
+	d := t.subOfTopic[topic]
 	t.locker.RUnlock()
 	return d
 }
@@ -175,8 +175,8 @@ func (t *SubscribeDataTable) Get(topic string) *SubscribeData {
 func (t *SubscribeDataTable) Topics() []string {
 	i := 0
 	t.locker.RLock()
-	topics := make([]string, len(t.table))
-	for k := range t.table {
+	topics := make([]string, len(t.subOfTopic))
+	for k := range t.subOfTopic {
 		topics[i] = k
 		i++
 	}
@@ -188,8 +188,8 @@ func (t *SubscribeDataTable) Topics() []string {
 func (t *SubscribeDataTable) Datas() []*SubscribeData {
 	i := 0
 	t.locker.RLock()
-	datas := make([]*SubscribeData, len(t.table))
-	for _, d := range t.table {
+	datas := make([]*SubscribeData, len(t.subOfTopic))
+	for _, d := range t.subOfTopic {
 		datas[i] = d
 		i++
 	}
@@ -200,9 +200,9 @@ func (t *SubscribeDataTable) Datas() []*SubscribeData {
 // Delete deletes the data of the specified topic, and return the previous one
 func (t *SubscribeDataTable) Delete(topic string) *SubscribeData {
 	t.locker.Lock()
-	prev, ok := t.table[topic]
+	prev, ok := t.subOfTopic[topic]
 	if ok {
-		delete(t.table, topic)
+		delete(t.subOfTopic, topic)
 	}
 	t.locker.Unlock()
 	return prev

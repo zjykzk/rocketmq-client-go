@@ -16,13 +16,13 @@ type Producer interface {
 
 type producerColl struct {
 	sync.RWMutex
-	eles map[string]Producer // key: group name, NOTE donot modify directly
+	producers map[string]Producer // key: group name, NOTE donot modify directly
 }
 
 func (pc *producerColl) coll() []Producer {
 	pc.RLock()
-	coll, i := make([]Producer, len(pc.eles)), 0
-	for _, p := range pc.eles {
+	coll, i := make([]Producer, len(pc.producers)), 0
+	for _, p := range pc.producers {
 		coll[i] = p
 		i++
 	}
@@ -32,9 +32,9 @@ func (pc *producerColl) coll() []Producer {
 
 func (pc *producerColl) putIfAbsent(group string, p Producer) (prev Producer, suc bool) {
 	pc.Lock()
-	prev, exist := pc.eles[group]
+	prev, exist := pc.producers[group]
 	if !exist {
-		pc.eles[group] = p
+		pc.producers[group] = p
 		suc = true
 	}
 	pc.Unlock()
@@ -43,20 +43,20 @@ func (pc *producerColl) putIfAbsent(group string, p Producer) (prev Producer, su
 
 func (pc *producerColl) contains(group string) bool {
 	pc.RLock()
-	_, b := pc.eles[group]
+	_, b := pc.producers[group]
 	pc.RUnlock()
 	return b
 }
 
 func (pc *producerColl) delete(group string) {
 	pc.Lock()
-	delete(pc.eles, group)
+	delete(pc.producers, group)
 	pc.Unlock()
 }
 
 func (pc *producerColl) size() int {
 	pc.RLock()
-	sz := len(pc.eles)
+	sz := len(pc.producers)
 	pc.RUnlock()
 	return sz
 }

@@ -203,9 +203,27 @@ func TestConsumeOrderlyStart(t *testing.T) {
 
 func TestInsertNewMessageQueueOrderly(t *testing.T) {
 	c := newTestConsumeOrderlyService(t)
+	mqLocker := c.mqLocker.(*fakeMessageQueueLocker)
+	// lock failed
+	mqLocker.lockErr = errors.New("bad lock")
 	pq, ok := c.insertNewMessageQueue(&message.Queue{BrokerName: "insert"})
+	assert.False(t, ok)
+	mqLocker.lockErr = nil
+	mqLocker.ignoreLockWait()
+
+	// locked returned empty mq
+	pq, ok = c.insertNewMessageQueue(&message.Queue{BrokerName: "insert"})
+	assert.False(t, ok)
+	mqLocker.ignoreLockWait()
+
+	// lock ok
+	mqLocker.lockRet = []message.Queue{{}}
+	pq, ok = c.insertNewMessageQueue(&message.Queue{BrokerName: "insert"})
 	assert.True(t, ok)
 	assert.NotNil(t, pq)
+	mqLocker.ignoreLockWait()
+
+	// insert duplicated
 	pq, ok = c.insertNewMessageQueue(&message.Queue{BrokerName: "insert"})
 	assert.False(t, ok)
 	assert.Nil(t, pq)

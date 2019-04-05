@@ -71,7 +71,7 @@ func newMQClient(config *Config, clientID string, logger log.Logger) (c *MQClien
 		clientID:       clientID,
 		exitChan:       make(chan struct{}),
 		consumers:      consumerColl{eles: make(map[string]Consumer)},
-		producers:      producerColl{eles: make(map[string]Producer)},
+		producers:      producerColl{producers: make(map[string]Producer)},
 		admins:         adminColl{eles: make(map[string]Admin)},
 		brokerAddrs:    brokerAddrTable{table: make(map[string]map[int32]string)},
 		brokerVersions: brokerVersionTable{table: make(map[string]map[string]int32)},

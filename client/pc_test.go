@@ -28,7 +28,7 @@ func (mp *fakeProducer) NeedUpdateTopicPublish(topic string) bool {
 
 func TestProducerColl(t *testing.T) {
 	group := "g1"
-	pc := producerColl{eles: make(map[string]Producer)}
+	pc := producerColl{producers: make(map[string]Producer)}
 	prev, suc := pc.putIfAbsent(group, &fakeProducer{group})
 	assert.Nil(t, prev)
 	assert.True(t, suc)
