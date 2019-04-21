@@ -56,6 +56,7 @@ func runPull() {
 	}
 
 	c := consumer.NewPullConsumer("example-group", strings.Split(namesrvAddrs, ","), logger)
+	c.UnitName = "pull"
 
 	c.Register([]string{topic}, &messageQueueChanger{
 		consumer: c,

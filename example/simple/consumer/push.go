@@ -29,6 +29,7 @@ func runPush() {
 		fmt.Printf("create concurrent consumer error:%s", err)
 		return
 	}
+	c.UnitName = "push"
 
 	c.Subscribe(topic, tags)
 	c.FromWhere = consumer.ConsumeFromFirstOffset

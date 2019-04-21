@@ -11,6 +11,7 @@ import (
 
 var (
 	namesrvAddrs string
+	group        string
 	tags         string
 	topic        string
 	isPull       bool
@@ -18,9 +19,10 @@ var (
 
 func init() {
 	flag.StringVar(&namesrvAddrs, "n", "", "name server address")
-	flag.BoolVar(&isPull, "m", true, "model:pull or push")
+	flag.BoolVar(&isPull, "m", true, "pull if true, else push")
 	flag.StringVar(&topic, "t", "", "topic")
-	flag.StringVar(&tags, "g", "", "tags")
+	flag.StringVar(&group, "g", "", "group")
+	flag.StringVar(&tags, "a", "", "tags")
 }
 
 // push consumer: go run -n 10.20.200.198:9988 -m=false -t=topic_name

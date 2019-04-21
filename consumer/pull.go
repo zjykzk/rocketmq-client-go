@@ -188,7 +188,8 @@ func (c *PullConsumer) pullSync(
 			SubVersion:           0,
 			ExpressionType:       ExprTypeTag.String(),
 		},
-		c.pullTimeout)
+		c.pullTimeout,
+	)
 	if err != nil {
 		c.logger.Errorf("pull message sync error:%s", err)
 		return nil, err
