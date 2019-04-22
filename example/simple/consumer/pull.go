@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/zjykzk/rocketmq-client-go/consumer"
 	"github.com/zjykzk/rocketmq-client-go/log"
@@ -14,38 +15,78 @@ type messageQueueChanger struct {
 	consumer *consumer.PullConsumer
 	logger   log.Logger
 
-	offset sync.Map
+	workers sync.Map
+	offset  sync.Map
 }
 
 func (qc *messageQueueChanger) Change(topic string, all, divided []*message.Queue) {
-	c := qc.consumer
-	for _, q := range divided {
+	qc.workers.Range(func(_, v interface{}) bool {
+		v.(*worker).stop()
+		return true
+	})
 
-		for {
-			pr, err := c.PullSync(q, tags, qc.getOffset(*q), 32)
-			if err != nil {
-				qc.logger.Errorf("pull error:%v", err)
-				break
-			}
-			qc.updateOffset(*q, pr.NextBeginOffset)
-			fmt.Printf("pull %s count:%d\n", q, len(pr.Messages))
-			if pr.Status == consumer.NoNewMessage {
-				break
-			}
-		}
+	fmt.Printf("new messages:%+v\n", divided)
+	for _, q := range divided {
+		qc.launchWorkerIfNot(q)
 	}
 }
 
-func (qc *messageQueueChanger) getOffset(q message.Queue) int64 {
-	v, ok := qc.offset.Load(q)
+func (qc *messageQueueChanger) launchWorkerIfNot(q *message.Queue) {
+	w := &worker{offset: &qc.offset, queue: q, exitChan: make(chan struct{}), consumer: qc.consumer}
+	qc.workers.Store(*q, w)
+	go w.start()
+}
+
+func (qc *messageQueueChanger) shutdown() {
+	qc.workers.Range(func(_, v interface{}) bool {
+		v.(*worker).stop()
+		return true
+	})
+}
+
+type worker struct {
+	state    int32
+	offset   *sync.Map
+	queue    *message.Queue
+	exitChan chan struct{}
+	consumer *consumer.PullConsumer
+}
+
+func (w *worker) getOffset(q message.Queue) int64 {
+	v, ok := w.offset.Load(q)
 	if !ok {
 		return 0
 	}
 	return v.(int64)
 }
 
-func (qc *messageQueueChanger) updateOffset(q message.Queue, offset int64) {
-	qc.offset.Store(q, offset)
+func (w *worker) updateOffset(q message.Queue, offset int64) {
+	w.offset.Store(q, offset)
+}
+
+func (w *worker) start() {
+	for {
+		select {
+		case <-w.exitChan:
+			return
+		default:
+		}
+
+		q := w.queue
+		pr, err := w.consumer.PullSyncBlockIfNotFound(q, tags, w.getOffset(*q), 32)
+		if err != nil {
+			fmt.Printf("pull error:%v\n", err)
+			continue
+		}
+		w.updateOffset(*q, pr.NextBeginOffset)
+		fmt.Printf("pull %s count:%d\n", q, len(pr.Messages))
+	}
+}
+
+func (w *worker) stop() {
+	if atomic.CompareAndSwapInt32(&w.state, 0, 1) {
+		close(w.exitChan)
+	}
 }
 
 func runPull() {
@@ -55,13 +96,11 @@ func runPull() {
 		return
 	}
 
-	c := consumer.NewPullConsumer("example-group", strings.Split(namesrvAddrs, ","), logger)
+	c := consumer.NewPullConsumer(group, strings.Split(namesrvAddrs, ","), logger)
+	qc := &messageQueueChanger{consumer: c, logger: logger}
 	c.UnitName = "pull"
 
-	c.Register([]string{topic}, &messageQueueChanger{
-		consumer: c,
-		logger:   logger,
-	})
+	c.Register([]string{topic}, qc)
 
 	err = c.Start()
 	if err != nil {
@@ -69,5 +108,5 @@ func runPull() {
 		return
 	}
 
-	waitQuitSignal(c.Shutdown)
+	waitQuitSignal(func() { qc.shutdown(); c.Shutdown() })
 }

@@ -23,7 +23,7 @@ func runPush() {
 	}
 
 	c, err := consumer.NewConcurrentlyConsumer(
-		"example-group", strings.Split(namesrvAddrs, ","), &simpleConsumer{}, logger,
+		group, strings.Split(namesrvAddrs, ","), &simpleConsumer{}, logger,
 	)
 	if err != nil {
 		fmt.Printf("create concurrent consumer error:%s", err)
