@@ -13,7 +13,8 @@ type fakeOffsetStorer struct {
 	runReadOffset bool
 	readType      int
 
-	runPersistOne bool
+	runPersistOne   bool
+	runRemoveOffset bool
 
 	sync.Mutex
 }
@@ -45,6 +46,7 @@ func (m *fakeOffsetStorer) persistOne(_ *message.Queue) {
 }
 
 func (m *fakeOffsetStorer) removeOffset(_ *message.Queue) (int64, bool) {
+	m.runRemoveOffset = true
 	return m.offset, false
 }
 

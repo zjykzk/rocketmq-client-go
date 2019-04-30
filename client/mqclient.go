@@ -577,22 +577,10 @@ func (c *MQClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Comman
 		}
 	case rpc.CheckTransactionState:
 	case rpc.ResetConsumerClientOffset:
+		c.resetOffset(ctx, cmd)
 	case rpc.GetConsumerStatusFromClient:
 	case rpc.GetConsumerRunningInfo:
-		group := cmd.ExtFields["consumerGroup"]
-		co := c.consumers.get(group)
-		if co == nil {
-			c.logger.Errorf("no consumer of group:%s", group)
-			cmd.Code = rpc.SystemError
-			cmd.Remark = fmt.Sprintf("The Consumer Group <%s> not exist in this consumer", group)
-		} else {
-			info := co.RunningInfo()
-			cmd.Body, _ = json.Marshal(info)
-			cmd.Code = rpc.Success
-			cmd.Remark = ""
-		}
-		cmd, err := c.Client.RequestSync(ctx.Address, cmd, time.Second)
-		c.logger.Debugf("GetConsumerRunningInfo result:%s, err:%v", cmd, err)
+		c.getConsumerRunningInfo(ctx, cmd)
 	case rpc.ConsumeMessageDirectly:
 	default:
 		return false
@@ -614,4 +602,51 @@ func (c *MQClient) ConsumerCount() int {
 // ProducerCount return the registered producer count
 func (c *MQClient) ProducerCount() int {
 	return c.producers.size()
+}
+
+func (c *MQClient) getConsumerRunningInfo(ctx *remote.ChannelContext, cmd *remote.Command) {
+	group := cmd.ExtFields["consumerGroup"]
+	co := c.consumers.get(group)
+	if co == nil {
+		c.logger.Errorf("no consumer of group:%s", group)
+		cmd.Code = rpc.SystemError
+		cmd.Remark = fmt.Sprintf("The Consumer Group <%s> not exist in this consumer", group)
+	} else {
+		info := co.RunningInfo()
+		cmd.Body, _ = json.Marshal(info)
+		cmd.Code = rpc.Success
+		cmd.Remark = ""
+	}
+	cmd, err := c.Client.RequestSync(ctx.Address, cmd, time.Second)
+	c.logger.Debugf("GetConsumerRunningInfo result:%s, err:%v", cmd, err)
+}
+
+func (c *MQClient) resetOffset(ctx *remote.ChannelContext, cmd *remote.Command) {
+	topic, group := cmd.ExtFields["topic"], cmd.ExtFields["group"]
+	timestamp, isForce := cmd.ExtFields["timestamp"], cmd.ExtFields["isForce"]
+	c.logger.Infof(
+		"invoke reset offset operation from broker:%s.topic:%s,group:%s,timestamp:%s, isForce:%s",
+		ctx.String(), topic, group, timestamp, isForce,
+	)
+
+	if len(cmd.Body) == 0 {
+		c.logger.Info("reset offset, but empty body")
+		return
+	}
+
+	offsets, err := parseResetOffsetRequest(string(cmd.Body))
+	if err != nil {
+		c.logger.Errorf("parse reset offsets error:%s", err)
+		return
+	}
+
+	consumer := c.consumers.get(group)
+	if consumer == nil {
+		return
+	}
+
+	err = consumer.ResetOffset(topic, offsets)
+	if err != nil {
+		c.logger.Errorf("consumer of group:%s reset offset error:%s", group, err)
+	}
 }

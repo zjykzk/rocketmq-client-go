@@ -270,6 +270,14 @@ func testDropExpiredProcessQueue(t *testing.T) {
 
 	counter()
 	assert.Equal(t, 1, count)
+
+	pq, ok := cs.processQueues.Load(message.Queue{})
+	assert.True(t, ok)
+	assert.True(t, pq.(*fakeProcessQueue).isDropped())
+
+	pq, ok = cs.processQueues.Load(message.Queue{QueueID: 1})
+	assert.True(t, ok)
+	assert.False(t, pq.(*fakeProcessQueue).isDropped())
 }
 
 func TestOrderProcessQueue(t *testing.T) {

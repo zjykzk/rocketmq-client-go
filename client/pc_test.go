@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -48,6 +49,10 @@ func TestProducerColl(t *testing.T) {
 
 type fakeConsumer struct {
 	group string
+
+	resetTopicOfOffset string
+	resetOffsetErr     error
+	runResetOffset     bool
 }
 
 func (mc *fakeConsumer) Group() string {
@@ -80,6 +85,11 @@ func (mc *fakeConsumer) Subscriptions() []*SubscribeData {
 func (mc *fakeConsumer) ReblanceQueue() {}
 func (mc *fakeConsumer) RunningInfo() RunningInfo {
 	return RunningInfo{}
+}
+func (mc *fakeConsumer) ResetOffset(topic string, offsets map[message.Queue]int64) error {
+	mc.resetTopicOfOffset = topic
+	mc.runResetOffset = true
+	return mc.resetOffsetErr
 }
 
 func TestConsumer(t *testing.T) {

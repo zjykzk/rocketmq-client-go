@@ -17,32 +17,32 @@ func TestParseResetOffsetBody(t *testing.T) {
 	// empty
 	r, err := parseResetOffsetRequest("{}")
 	assert.Nil(t, err)
-	assert.Nil(t, r.Offsets)
+	assert.Nil(t, r)
 
 	// empty
 	r, err = parseResetOffsetRequest(`{"offsetTable":{}}`)
 	assert.Nil(t, err)
-	assert.Nil(t, r.Offsets)
+	assert.Nil(t, r)
 
 	// empty
 	r, err = parseResetOffsetRequest(`{"offsetTable":{}}`)
 	assert.Nil(t, err)
-	assert.Nil(t, r.Offsets)
+	assert.Nil(t, r)
 
 	// queueID
 	r, err = parseResetOffsetRequest(`{"offsetTable":{{"queueID":1}:2}}`)
 	assert.Nil(t, err)
-	assert.Equal(t, int64(2), r.Offsets[message.Queue{QueueID: 1}])
+	assert.Equal(t, int64(2), r[message.Queue{QueueID: 1}])
 
 	// brokerName,queueID
 	r, err = parseResetOffsetRequest(`{"offsetTable":{{"brokerName":"broker name","queueID":1}:3}}`)
 	assert.Nil(t, err)
-	assert.Equal(t, int64(3), r.Offsets[message.Queue{QueueID: 1, BrokerName: "broker name"}])
+	assert.Equal(t, int64(3), r[message.Queue{QueueID: 1, BrokerName: "broker name"}])
 
 	// brokerName,queueID,topic
 	r, err = parseResetOffsetRequest(`{"offsetTable":{{"brokerName":"broker name","queueID":1,"topic":"topic"}:4}}`)
 	assert.Nil(t, err)
-	assert.Equal(t, int64(4), r.Offsets[message.Queue{QueueID: 1, BrokerName: "broker name", Topic: "topic"}])
+	assert.Equal(t, int64(4), r[message.Queue{QueueID: 1, BrokerName: "broker name", Topic: "topic"}])
 
 	// mutli brokerName,queueID,topic
 	r, err = parseResetOffsetRequest(`
@@ -51,6 +51,6 @@ func TestParseResetOffsetBody(t *testing.T) {
 	{"brokerName":"broker name2","queueID":2,"topic":"topic2"}:5
 }}`)
 	assert.Nil(t, err)
-	assert.Equal(t, int64(4), r.Offsets[message.Queue{QueueID: 1, BrokerName: "broker name", Topic: "topic"}])
-	assert.Equal(t, int64(5), r.Offsets[message.Queue{QueueID: 2, BrokerName: "broker name2", Topic: "topic2"}])
+	assert.Equal(t, int64(4), r[message.Queue{QueueID: 1, BrokerName: "broker name", Topic: "topic"}])
+	assert.Equal(t, int64(5), r[message.Queue{QueueID: 2, BrokerName: "broker name2", Topic: "topic2"}])
 }

@@ -461,3 +461,27 @@ func TestStartAndShutdown(t *testing.T) {
 	}
 	c.Shutdown()
 }
+
+func TestPushResetOffset(t *testing.T) {
+	c := newTestConcurrentConsumer()
+	offseter, consumerService := &fakeOffsetStorer{}, &fakeConsumerService{}
+	c.offsetStorer, c.consumeService = offseter, consumerService
+
+	// no message queue
+	c.ResetOffset("TestPushResetOffset", nil)
+	assert.False(t, consumerService.runDropAndClear)
+
+	// message queue
+	consumerService.queues = []message.Queue{{}}
+	c.ResetOffset("TestPushResetOffset", map[message.Queue]int64{message.Queue{}: 1})
+	assert.True(t, consumerService.runDropAndClear)
+
+	// update offset store
+	consumerService.queues = []message.Queue{{}, {QueueID: 1}}
+	c.ResetOffset("TestPushResetOffset", map[message.Queue]int64{message.Queue{}: 1})
+	assert.True(t, offseter.runUpdate)
+	assert.True(t, offseter.runPersistOne)
+	assert.True(t, offseter.runRemoveOffset)
+	assert.True(t, consumerService.runDropAndRemoveProcessQueue)
+	assert.True(t, consumerService.runRemoveProcessQueue)
+}

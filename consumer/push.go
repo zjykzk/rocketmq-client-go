@@ -740,3 +740,32 @@ func (c *PushConsumer) Lock(broker string, mqs []message.Queue) ([]message.Queue
 func (c *PushConsumer) Unlock(mq message.Queue) error {
 	return c.client.UnlockMessageQueuesOneway(c.GroupName, mq.BrokerName, []message.Queue{mq})
 }
+
+// ResetOffset the offsets of the topic
+func (c *PushConsumer) ResetOffset(topic string, offsets map[message.Queue]int64) error {
+	c.Pause()
+	defer c.Resume()
+
+	mqs := c.consumeService.messageQueuesOfTopic(topic)
+	for _, mq := range mqs {
+		if _, ok := offsets[mq]; ok {
+			c.consumeService.dropAndClear(&mq)
+		}
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	for _, mq := range mqs {
+		offset, ok := offsets[mq]
+		if !ok {
+			continue
+		}
+
+		c.offsetStorer.updateOffset(&mq, offset)
+		c.offsetStorer.persistOne(&mq)
+		c.offsetStorer.removeOffset(&mq)
+		c.consumeService.dropAndRemoveProcessQueue(&mq)
+		c.consumeService.removeProcessQueue(&mq)
+	}
+
+	return nil
+}

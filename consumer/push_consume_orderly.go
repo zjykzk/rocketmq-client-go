@@ -235,6 +235,10 @@ func (cs *consumeOrderlyService) dropPullExpiredProcessQueues() {
 		return true
 	})
 
+	for _, oq := range oqs {
+		oq.drop()
+	}
+
 	for i := range oqs {
 		cs.unlockProcessQueueInBroker(mqs[i], oqs[i], time.Second)
 	}
@@ -506,6 +510,19 @@ func (cs *consumeOrderlyService) submitConsumeRequest(
 	})
 }
 
+func (cs *consumeOrderlyService) dropAndClear(mq *message.Queue) error {
+	v, ok := cs.processQueues.Load(*mq)
+	if !ok {
+		return errors.New("no process table in the order service")
+	}
+
+	q := v.(*orderProcessQueue)
+	q.clear()
+	q.drop()
+
+	return nil
+}
+
 func newOrderProcessQueue() *orderProcessQueue {
 	return &orderProcessQueue{
 		timeoutLocker:     newTimeoutLocker(),
@@ -538,6 +555,7 @@ func (q *orderProcessQueue) lockInBroker(timeNano int64) bool {
 	atomic.StoreInt64(&q.lastLockTime, timeNano)
 	return ok
 }
+
 func (q *orderProcessQueue) isLockedInBrokerExpired(timeout time.Duration) bool {
 	return time.Now().UnixNano()-atomic.LoadInt64(&q.lastLockTime) >= int64(timeout)
 }
@@ -613,4 +631,15 @@ func (q *orderProcessQueue) commit() int64 {
 
 func (q *orderProcessQueue) clearConsumingMessages() {
 	q.consumingMessages = make(map[offset]*message.Ext, 8)
+}
+
+func (q *orderProcessQueue) clear() {
+	q.Lock()
+	q.consumingMessages = nil
+	q.messages.Clear()
+	q.nextQueueOffset = 0
+	q.Unlock()
+
+	atomic.StoreInt64(&q.msgSize, 0)
+	atomic.StoreInt32(&q.msgCount, 0)
 }

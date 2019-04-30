@@ -2,10 +2,12 @@ package client
 
 import (
 	"errors"
+	"net"
 	"sort"
 	"testing"
 
 	"github.com/zjykzk/rocketmq-client-go/log"
+	"github.com/zjykzk/rocketmq-client-go/remote"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -38,10 +40,10 @@ func TestMQClient(t *testing.T) {
 
 	t.Run("[un]register consumer", func(t *testing.T) {
 		assert.NotNil(t, client.RegisterConsumer(&fakeConsumer{}))
-		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{"group"}))
-		assert.NotNil(t, client.RegisterConsumer(&fakeConsumer{"group"}))
+		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{group: "group"}))
+		assert.NotNil(t, client.RegisterConsumer(&fakeConsumer{group: "group"}))
 		assert.Equal(t, 1, client.ConsumerCount())
-		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{"1group"}))
+		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{group: "1group"}))
 		assert.Equal(t, 2, client.ConsumerCount())
 
 		client.UnregisterConsumer("group")
@@ -81,7 +83,7 @@ func TestMQClient(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = client1.RegisterProducer(&fakeProducer{"p1"})
-		mc := &fakeConsumer{"c0"}
+		mc := &fakeConsumer{group: "c0"}
 		client1.RegisterConsumer(mc)
 
 		hd := client1.prepareHeartbeatData()
@@ -156,4 +158,37 @@ func TestMQClient(t *testing.T) {
 		updated, _ = client.updateTopicRouterInfoFromNamesrv("t")
 		assert.True(t, updated)
 	})
+}
+
+func TestResetOffset(t *testing.T) {
+	client, err := New(&Config{NameServerAddrs: []string{"addr"}}, "clientid", log.Std)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc := &fakeConsumer{group: "TestResetOffset"}
+	err = client.RegisterConsumer(fc)
+	assert.Nil(t, err)
+
+	// no body
+	conn, _ := net.Pipe()
+	client.resetOffset(&remote.ChannelContext{Conn: conn}, &remote.Command{})
+	assert.False(t, fc.runResetOffset)
+
+	// bad offsets
+	client.resetOffset(&remote.ChannelContext{Conn: conn}, &remote.Command{Body: []byte("}")})
+	assert.False(t, fc.runResetOffset)
+
+	// no consumer
+	fc.resetOffsetErr = errors.New("reset failed")
+	client.resetOffset(&remote.ChannelContext{Conn: conn}, &remote.Command{Body: []byte("{}")})
+	assert.False(t, fc.runResetOffset)
+
+	// OK
+	client.resetOffset(&remote.ChannelContext{Conn: conn}, &remote.Command{
+		Body:      []byte("{}"),
+		ExtFields: map[string]string{"group": fc.group, "topic": "TestResetOffsetTopic"},
+	})
+	assert.True(t, fc.runResetOffset)
+	assert.Equal(t, "TestResetOffsetTopic", fc.resetTopicOfOffset)
 }

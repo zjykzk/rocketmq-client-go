@@ -16,6 +16,10 @@ type fakeConsumerService struct {
 
 	runConsumeRequest            bool
 	runDropAndRemoveProcessQueue bool
+	runRemoveProcessQueue        bool
+
+	runDropAndClear bool
+	dropAndClearErr error
 }
 
 func (m *fakeConsumerService) messageQueuesOfTopic(topic string) []message.Queue {
@@ -51,4 +55,13 @@ func (m *fakeConsumerService) check(*processQueue) error {
 func (m *fakeConsumerService) submitConsumeRequest([]*message.Ext, *processQueue, *message.Queue) {
 	m.runConsumeRequest = true
 	return
+}
+
+func (m *fakeConsumerService) dropAndClear(mq *message.Queue) error {
+	m.runDropAndClear = true
+	return m.dropAndClearErr
+}
+
+func (m *fakeConsumerService) removeProcessQueue(mq *message.Queue) {
+	m.runRemoveProcessQueue = true
 }

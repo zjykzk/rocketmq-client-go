@@ -8,14 +8,9 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
-// ResetOffsetRequest the request of resetting offset from the broker
-type ResetOffsetRequest struct {
-	Offsets map[message.Queue]int64
-}
-
 // the data has following format:
 // {"offsetTable":{{"brokerName":"broker","queueId":1,"topic":"topic"}:1,{"queueId":0}:1}}
-func parseResetOffsetRequest(d string) (r ResetOffsetRequest, err error) {
+func parseResetOffsetRequest(d string) (offsets map[message.Queue]int64, err error) {
 	d = strings.TrimSpace(d)
 	if len(d) < 2 {
 		err = errors.New("bad format")
@@ -42,11 +37,11 @@ func parseResetOffsetRequest(d string) (r ResetOffsetRequest, err error) {
 			return
 		}
 
-		if r.Offsets == nil {
-			r.Offsets = make(map[message.Queue]int64)
+		if offsets == nil {
+			offsets = make(map[message.Queue]int64)
 		}
 
-		r.Offsets[q], adv = readFirstInt64(d)
+		offsets[q], adv = readFirstInt64(d)
 		d = d[adv:]
 	}
 }

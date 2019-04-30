@@ -3,6 +3,7 @@ package client
 import (
 	"sync"
 
+	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -82,6 +83,7 @@ type Consumer interface {
 	Subscriptions() []*SubscribeData
 	ReblanceQueue()
 	RunningInfo() RunningInfo
+	ResetOffset(topic string, offsets map[message.Queue]int64) error
 }
 
 type consumerColl struct {

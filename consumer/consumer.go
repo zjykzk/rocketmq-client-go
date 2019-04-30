@@ -554,6 +554,11 @@ func (c *consumer) persistAndRemoveOffset(q *message.Queue) {
 	c.offsetStorer.removeOffset(q)
 }
 
+// ResetOffset the offsets of the topic
+func (c *consumer) ResetOffset(topic string, offsets map[message.Queue]int64) error {
+	return nil // empty
+}
+
 func calcStatusFromCode(code remote.Code) PullStatus {
 	switch code {
 	case rpc.Success:

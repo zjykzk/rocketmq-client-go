@@ -9,4 +9,6 @@ type consumeService interface {
 	flowControl(*processQueue) bool
 	check(*processQueue) error
 	submitConsumeRequest([]*message.Ext, *processQueue, *message.Queue)
+	dropAndClear(mq *message.Queue) error
+	removeProcessQueue(mq *message.Queue)
 }
