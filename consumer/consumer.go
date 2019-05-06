@@ -118,12 +118,6 @@ func (c *consumer) start() (err error) {
 		return
 	}
 
-	err = mqClient.RegisterConsumer(c)
-	if err != nil {
-		c.logger.Errorf("register producer error:%s", err.Error())
-		return
-	}
-
 	err = mqClient.Start()
 	if err != nil {
 		c.logger.Errorf("start mq client error:%s", err)
@@ -552,11 +546,6 @@ func (c *consumer) processPullResponse(
 func (c *consumer) persistAndRemoveOffset(q *message.Queue) {
 	c.offsetStorer.persistOne(q)
 	c.offsetStorer.removeOffset(q)
-}
-
-// ResetOffset the offsets of the topic
-func (c *consumer) ResetOffset(topic string, offsets map[message.Queue]int64) error {
-	return nil // empty
 }
 
 func calcStatusFromCode(code remote.Code) PullStatus {

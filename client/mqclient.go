@@ -572,16 +572,17 @@ OUT:
 func (c *MQClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
 	switch cmd.Code {
 	case rpc.NotifyConsumerIdsChanged:
-		for _, co := range c.consumers.coll() {
-			co.ReblanceQueue()
-		}
+		c.consumerIDsChanged(ctx, cmd)
 	case rpc.CheckTransactionState:
+		//TODO
 	case rpc.ResetConsumerClientOffset:
 		c.resetOffset(ctx, cmd)
 	case rpc.GetConsumerStatusFromClient:
+		//TODO
 	case rpc.GetConsumerRunningInfo:
 		c.getConsumerRunningInfo(ctx, cmd)
 	case rpc.ConsumeMessageDirectly:
+		//TODO
 	default:
 		return false
 	}
@@ -602,6 +603,17 @@ func (c *MQClient) ConsumerCount() int {
 // ProducerCount return the registered producer count
 func (c *MQClient) ProducerCount() int {
 	return c.producers.size()
+}
+
+func (c *MQClient) consumerIDsChanged(ctx *remote.ChannelContext, cmd *remote.Command) {
+	c.logger.Infof(
+		"receive broker's notification[%s], the consumer group: %s changed, rebalance immediately",
+		ctx.String(), cmd.ExtFields["group"],
+	)
+
+	for _, co := range c.consumers.coll() {
+		co.ReblanceQueue()
+	}
 }
 
 func (c *MQClient) getConsumerRunningInfo(ctx *remote.ChannelContext, cmd *remote.Command) {

@@ -91,6 +91,14 @@ func (mc *fakeConsumer) ResetOffset(topic string, offsets map[message.Queue]int6
 	mc.runResetOffset = true
 	return mc.resetOffsetErr
 }
+func (mc *fakeConsumer) ConsumeMessageDirectly(
+	msg *message.Ext, group, broker string,
+) (
+	r ConsumeMessageDirectlyResult, err error,
+) {
+	// TODO
+	return
+}
 
 func TestConsumer(t *testing.T) {
 	group := "g1"

@@ -211,6 +211,12 @@ func (c *PushConsumer) start() error {
 		return err
 	}
 
+	err = c.client.RegisterConsumer(c)
+	if err != nil {
+		c.logger.Errorf("register PUSH consumer error:%s", err)
+		return err
+	}
+
 	shutdowner := &rocketmq.ShutdownCollection{}
 	shutdowner.AddLastFuncs(c.shutdownStart)
 
@@ -768,4 +774,14 @@ func (c *PushConsumer) ResetOffset(topic string, offsets map[message.Queue]int64
 	}
 
 	return nil
+}
+
+// ConsumeMessageDirectly consume the specified message notified by the broker
+func (c *PushConsumer) ConsumeMessageDirectly(
+	msg *message.Ext, group, broker string,
+) (
+	r client.ConsumeMessageDirectlyResult, err error,
+) {
+	// TODO
+	return
 }
