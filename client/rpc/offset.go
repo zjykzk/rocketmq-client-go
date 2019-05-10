@@ -74,8 +74,16 @@ func UpdateConsumerOffset(
 		queueID: queueID,
 		offset:  offset,
 	}
-	_, err := client.RequestSync(addr, remote.NewCommand(updateConsumerOffset, h), to)
-	return err
+	cmd, err := client.RequestSync(addr, remote.NewCommand(updateConsumerOffset, h), to)
+	if err != nil {
+		return requestError(err)
+	}
+
+	if cmd.Code != Success {
+		return brokerError(cmd)
+	}
+
+	return nil
 }
 
 // UpdateConsumerOffsetOneway updates the offset of the consumer queue
@@ -88,5 +96,51 @@ func UpdateConsumerOffsetOneway(
 		queueID: queueID,
 		offset:  offset,
 	}
-	return client.RequestOneway(addr, remote.NewCommand(updateConsumerOffset, h))
+	err := client.RequestOneway(addr, remote.NewCommand(updateConsumerOffset, h))
+	if err != nil {
+		return requestError(err)
+	}
+	return nil
+}
+
+type resetConsumeOffsetHeader struct {
+	topic     string
+	group     string
+	timestamp int64
+	isForce   bool
+}
+
+func (h *resetConsumeOffsetHeader) ToMap() map[string]string {
+	return map[string]string{
+		"topic":     h.topic,
+		"group":     h.group,
+		"timestamp": strconv.FormatInt(h.timestamp, 10),
+		"isForce":   strconv.FormatBool(h.isForce),
+	}
+}
+
+// ResetConsumeOffset requests broker to reset the offsets of the specified topic, the offsets' owner
+// is specified by the group
+func ResetConsumeOffset(
+	client remote.Client, addr, topic, group string, timestamp time.Time, isForce bool, timeout time.Duration,
+) (
+	[]byte, error,
+) {
+	h := &resetConsumeOffsetHeader{
+		topic:     topic,
+		group:     group,
+		timestamp: timestamp.UnixNano() / int64(time.Millisecond),
+		isForce:   isForce,
+	}
+
+	cmd, err := client.RequestSync(addr, remote.NewCommand(invokeBrokerToResetOffset, h), timeout)
+	if err != nil {
+		return nil, requestError(err)
+	}
+
+	if cmd.Code != Success {
+		return nil, brokerError(cmd)
+	}
+
+	return cmd.Body, nil
 }
