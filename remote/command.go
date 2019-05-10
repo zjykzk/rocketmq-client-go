@@ -60,6 +60,11 @@ func (cmd *Command) isResponseType() bool {
 	return cmd.Flag&(responsType) == responsType
 }
 
+// MarkResponse mark the command as response
+func (cmd *Command) MarkResponse() {
+	cmd.markResponseType()
+}
+
 func (cmd *Command) markResponseType() {
 	cmd.Flag = (cmd.Flag | responsType)
 }
