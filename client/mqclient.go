@@ -16,6 +16,8 @@ import (
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
+type processor func(*remote.ChannelContext, *remote.Command) (*remote.Command, error)
+
 // MQClient the client commuicate with broker
 // it's shared by all consumer & producer with the same client id
 type MQClient struct {
@@ -39,6 +41,8 @@ type MQClient struct {
 	brokerVersions brokerVersionTable
 
 	routersOfTopic *route.TopicRouterTable
+
+	processors map[remote.Code]processor
 
 	logger log.Logger
 }
@@ -79,6 +83,8 @@ func newMQClient(config *Config, clientID string, logger log.Logger) (c *MQClien
 		routersOfTopic: route.NewTopicRouterTable(),
 		logger:         logger,
 	}
+
+	c.initProcessor()
 
 	c.Config = *config
 	if c.HeartbeatBrokerInterval <= 0 {
@@ -570,39 +576,38 @@ OUT:
 	return r
 }
 
-func (c *MQClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
-	var (
-		resp *remote.Command
-		err  error
-	)
-	switch cmd.Code {
-	case rpc.NotifyConsumerIdsChanged:
-		resp, err = c.consumerIDsChanged(ctx, cmd)
-	case rpc.CheckTransactionState:
-		//TODO
-	case rpc.ResetConsumerClientOffset:
-		resp, err = c.resetOffset(ctx, cmd)
-	case rpc.GetConsumerStatusFromClient:
-		//TODO
-	case rpc.GetConsumerRunningInfo:
-		resp, err = c.getConsumerRunningInfo(ctx, cmd)
-	case rpc.ConsumeMessageDirectly:
-		//TODO
-	default:
-		return false
+func (c *MQClient) initProcessor() {
+	c.processors = map[remote.Code]processor{
+		rpc.NotifyConsumerIdsChanged:    c.consumerIDsChanged,
+		rpc.CheckTransactionState:       c.checkTransactionState,
+		rpc.ResetConsumerClientOffset:   c.resetOffset,
+		rpc.GetConsumerStatusFromClient: c.getConsumerStatusFromClient,
+		rpc.GetConsumerRunningInfo:      c.getConsumerRunningInfo,
+		rpc.ConsumeMessageDirectly:      c.consumeMessageDirectly,
 	}
+}
+
+func (c *MQClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) (processed bool) {
+	proc, ok := c.processors[cmd.Code]
+	if !ok {
+		return
+	}
+
 	c.logger.Debugf("processed Request:%v", cmd)
+
+	processed = true
+	resp, err := proc(ctx, cmd)
 
 	if err != nil {
 		c.logger.Errorf("process error:%s", err)
 	}
 
 	if cmd.IsOneway() {
-		goto RETURN
+		return
 	}
 
 	if resp == nil {
-		goto RETURN
+		return
 	}
 
 	resp.Opaque = cmd.Opaque
@@ -610,23 +615,13 @@ func (c *MQClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Comman
 	cmd, err = c.Client.RequestSync(ctx.Address, resp, 3*time.Second)
 	c.logger.Debugf("send response result:%s, err:%v", cmd, err)
 
-RETURN:
-	return true
+	return
 }
 
-// AdminCount return the registered admin count
-func (c *MQClient) AdminCount() int {
-	return c.admins.size()
-}
-
-// ConsumerCount return the registered consumer count
-func (c *MQClient) ConsumerCount() int {
-	return c.consumers.size()
-}
-
-// ProducerCount return the registered producer count
-func (c *MQClient) ProducerCount() int {
-	return c.producers.size()
+func (c *MQClient) checkTransactionState(ctx *remote.ChannelContext, cmd *remote.Command) (
+	resp *remote.Command, err error,
+) {
+	return // TODO
 }
 
 func (c *MQClient) consumerIDsChanged(ctx *remote.ChannelContext, cmd *remote.Command) (
@@ -739,4 +734,25 @@ func (c *MQClient) consumeMessageDirectly(ctx *remote.ChannelContext, cmd *remot
 
 	resp = remote.NewCommandWithBody(rpc.Success, nil, data)
 	return
+}
+
+func (c *MQClient) getConsumerStatusFromClient(ctx *remote.ChannelContext, cmd *remote.Command) (
+	resp *remote.Command, err error,
+) {
+	return // TODO
+}
+
+// AdminCount return the registered admin count
+func (c *MQClient) AdminCount() int {
+	return c.admins.size()
+}
+
+// ConsumerCount return the registered consumer count
+func (c *MQClient) ConsumerCount() int {
+	return c.consumers.size()
+}
+
+// ProducerCount return the registered producer count
+func (c *MQClient) ProducerCount() int {
+	return c.producers.size()
 }
