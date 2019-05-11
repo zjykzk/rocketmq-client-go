@@ -56,16 +56,12 @@ func (cmd *Command) ID() int64 {
 	return int64(cmd.Opaque)
 }
 
-func (cmd *Command) isResponseType() bool {
+func (cmd *Command) isResponse() bool {
 	return cmd.Flag&(responsType) == responsType
 }
 
 // MarkResponse mark the command as response
 func (cmd *Command) MarkResponse() {
-	cmd.markResponseType()
-}
-
-func (cmd *Command) markResponseType() {
 	cmd.Flag = (cmd.Flag | responsType)
 }
 
