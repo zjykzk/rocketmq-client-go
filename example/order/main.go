@@ -10,25 +10,30 @@ import (
 )
 
 var (
-	namesrvAddrs string
 	group        string
+	namesrvAddrs string
 	tags         string
 	topic        string
-	isPull       bool
+	isProducer   bool
 )
 
 func init() {
-	flag.StringVar(&namesrvAddrs, "n", "", "name server address")
-	flag.BoolVar(&isPull, "m", true, "pull if true, else push")
+	flag.StringVar(&group, "g", "", "group name")
+	flag.StringVar(&namesrvAddrs, "n", "", "name server address, split by comma")
 	flag.StringVar(&topic, "t", "", "topic")
-	flag.StringVar(&group, "g", "", "group")
-	flag.StringVar(&tags, "a", "", "tags")
+	flag.StringVar(&tags, "a", "", "tags, split by comma")
+	flag.BoolVar(&isProducer, "p", true, "if true, run producer, otherwise consumer")
 }
 
-// push consumer: go run -n 10.20.200.198:9988 -m=false -t=topic_name
-// pull consumer: go run -n 10.20.200.198:9988 -m=true -t=topic_name
+// consumer: go run -n 10.20.200.198:9988 -t=topic_name -p=false
+// producer: go run -n 10.20.200.198:9988 -t=topic_name -p=true
 func main() {
 	flag.Parse()
+
+	if group == "" {
+		println("empty group")
+		return
+	}
 
 	if namesrvAddrs == "" {
 		println("bad namesrvAddrs:" + namesrvAddrs)
@@ -40,10 +45,10 @@ func main() {
 		return
 	}
 
-	if isPull {
-		runPull()
+	if isProducer {
+		runProucer()
 	} else {
-		runPush()
+		runConsumer()
 	}
 }
 

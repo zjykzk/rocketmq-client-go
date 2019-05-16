@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
 
@@ -28,7 +29,7 @@ func (mp *fakeProducer) NeedUpdateTopicPublish(topic string) bool {
 
 func TestProducerColl(t *testing.T) {
 	group := "g1"
-	pc := producerColl{eles: make(map[string]Producer)}
+	pc := producerColl{producers: make(map[string]Producer)}
 	prev, suc := pc.putIfAbsent(group, &fakeProducer{group})
 	assert.Nil(t, prev)
 	assert.True(t, suc)
@@ -48,6 +49,10 @@ func TestProducerColl(t *testing.T) {
 
 type fakeConsumer struct {
 	group string
+
+	resetTopicOfOffset string
+	resetOffsetErr     error
+	runResetOffset     bool
 }
 
 func (mc *fakeConsumer) Group() string {
@@ -80,6 +85,19 @@ func (mc *fakeConsumer) Subscriptions() []*SubscribeData {
 func (mc *fakeConsumer) ReblanceQueue() {}
 func (mc *fakeConsumer) RunningInfo() RunningInfo {
 	return RunningInfo{}
+}
+func (mc *fakeConsumer) ResetOffset(topic string, offsets map[message.Queue]int64) error {
+	mc.resetTopicOfOffset = topic
+	mc.runResetOffset = true
+	return mc.resetOffsetErr
+}
+func (mc *fakeConsumer) ConsumeMessageDirectly(
+	msg *message.Ext, group, broker string,
+) (
+	r ConsumeMessageDirectlyResult, err error,
+) {
+	// TODO
+	return
 }
 
 func TestConsumer(t *testing.T) {

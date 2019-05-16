@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	normal = iota
-	dropped
+	processQueueStateNormal = iota
+	processQueueStateDropped
 )
 
 type offset int64
@@ -86,11 +86,11 @@ func (pq *processQueue) queueOffsetToConsume() (of int64) {
 }
 
 func (pq *processQueue) drop() bool {
-	return atomic.CompareAndSwapInt32(&pq.dropped, normal, dropped)
+	return atomic.CompareAndSwapInt32(&pq.dropped, processQueueStateNormal, processQueueStateDropped)
 }
 
 func (pq *processQueue) isDropped() bool {
-	return atomic.LoadInt32(&pq.dropped) == dropped
+	return atomic.LoadInt32(&pq.dropped) == processQueueStateDropped
 }
 
 func (pq *processQueue) updatePullTime(t time.Time) {

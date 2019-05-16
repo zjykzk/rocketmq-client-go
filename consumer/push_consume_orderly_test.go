@@ -26,16 +26,32 @@ func (l *fakeMessageQueueLocker) Lock(broker string, mqs []message.Queue) ([]mes
 	return l.lockRet, l.lockErr
 }
 
+func (l *fakeMessageQueueLocker) ignoreLockWait() {
+	select {
+	case <-l.waitRunChan:
+	default:
+	}
+}
+
 func (l *fakeMessageQueueLocker) Unlock(mq message.Queue) error {
 	l.runUnlock = true
 	return l.unlockErr
 }
 
 type fakeOrderlyConsumer struct {
-	status ConsumeOrderlyStatus
+	afterConsumeCallback func()
+
+	runConsumeCount int
+	status          ConsumeOrderlyStatus
 }
 
 func (c *fakeOrderlyConsumer) Consume(messages []*message.Ext, ctx *OrderlyContext) ConsumeOrderlyStatus {
+	c.runConsumeCount++
+
+	if c.afterConsumeCallback != nil {
+		c.afterConsumeCallback()
+	}
+
 	return c.status
 }
 
@@ -98,20 +114,20 @@ func newTestConsumeOrderlyService(t *testing.T) *consumeOrderlyService {
 }
 
 func TestLock(t *testing.T) {
-	c := newTestConsumeOrderlyService(t)
+	c, oq := newTestConsumeOrderlyService(t), newOrderProcessQueue()
 	locker := c.mqLocker.(*fakeMessageQueueLocker)
-	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b", Topic: "t"}, true)
+	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b", Topic: "t"}, oq)
 
 	assert.Equal(t, locker.lockErr, c.lockQueues())
 }
 
 func TestGetMQsGroupByBroker(t *testing.T) {
-	c := newTestConsumeOrderlyService(t)
+	c, oq := newTestConsumeOrderlyService(t), newOrderProcessQueue()
 	assert.Equal(t, 0, len(c.getMQsGroupByBroker()))
 
-	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b", Topic: "t"}, true)
-	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b1", Topic: "t1"}, true)
-	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b1", Topic: "t2"}, true)
+	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b", Topic: "t"}, oq)
+	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b1", Topic: "t1"}, oq)
+	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b1", Topic: "t2"}, oq)
 
 	assert.True(t, isEqualOfMQ([]mqsOfBroker{
 		{broker: "b", mqs: []message.Queue{{BrokerName: "b", Topic: "t"}}},
@@ -178,18 +194,36 @@ NEXT_MQ2:
 }
 
 func TestConsumeOrderlyStart(t *testing.T) {
-	c := newTestConsumeOrderlyService(t)
+	c, oq := newTestConsumeOrderlyService(t), newOrderProcessQueue()
 	c.start()
-	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b", Topic: "t"}, true)
+	c.baseConsumeService.processQueues.Store(message.Queue{BrokerName: "b", Topic: "t"}, oq)
 
 	<-c.mqLocker.(*fakeMessageQueueLocker).waitRunChan
 }
 
 func TestInsertNewMessageQueueOrderly(t *testing.T) {
 	c := newTestConsumeOrderlyService(t)
+	mqLocker := c.mqLocker.(*fakeMessageQueueLocker)
+	// lock failed
+	mqLocker.lockErr = errors.New("bad lock")
 	pq, ok := c.insertNewMessageQueue(&message.Queue{BrokerName: "insert"})
+	assert.False(t, ok)
+	mqLocker.lockErr = nil
+	mqLocker.ignoreLockWait()
+
+	// locked returned empty mq
+	pq, ok = c.insertNewMessageQueue(&message.Queue{BrokerName: "insert"})
+	assert.False(t, ok)
+	mqLocker.ignoreLockWait()
+
+	// lock ok
+	mqLocker.lockRet = []message.Queue{{}}
+	pq, ok = c.insertNewMessageQueue(&message.Queue{BrokerName: "insert"})
 	assert.True(t, ok)
 	assert.NotNil(t, pq)
+	mqLocker.ignoreLockWait()
+
+	// insert duplicated
 	pq, ok = c.insertNewMessageQueue(&message.Queue{BrokerName: "insert"})
 	assert.False(t, ok)
 	assert.Nil(t, pq)
@@ -236,6 +270,14 @@ func testDropExpiredProcessQueue(t *testing.T) {
 
 	counter()
 	assert.Equal(t, 1, count)
+
+	pq, ok := cs.processQueues.Load(message.Queue{})
+	assert.True(t, ok)
+	assert.True(t, pq.(*fakeProcessQueue).isDropped())
+
+	pq, ok = cs.processQueues.Load(message.Queue{QueueID: 1})
+	assert.True(t, ok)
+	assert.False(t, pq.(*fakeProcessQueue).isDropped())
 }
 
 func TestOrderProcessQueue(t *testing.T) {
@@ -364,11 +406,134 @@ func TestDropPullExpiredProcessQueue(t *testing.T) {
 	assert.Equal(t, normalOQ, v.(*orderProcessQueue))
 }
 
-func testOrderlyConsume(t *testing.T) {
+func TestOrderlyConsume(t *testing.T) {
 	cs := newTestConsumeOrderlyService(t)
+	consumer := cs.consumer.(*fakeOrderlyConsumer)
 
-	// dropped
-	cs.consume(&consumeOrderlyRequest{})
+	t.Run("normal", func(t *testing.T) {
+		mq, oq := &message.Queue{}, newOrderProcessQueue()
+		r := &consumeOrderlyRequest{messageQueue: mq, processQueue: oq}
+		// dropped
+		oq.drop()
+		cs.consume(r)
+		oq.dropped = 0
+
+		// unlocked
+		oq.lockedInBroker = unlockedInBroker
+		cs.consume(r)
+
+		// locked and expired
+		oq.lockedInBroker = lockedInBroker
+		cs.consume(r)
+
+		// consume no message
+		oq.lastLockTime = time.Now().UnixNano()
+		cs.consume(r)
+		assert.Equal(t, 0, consumer.runConsumeCount)
+
+		// with message
+		oq.putMessages([]*message.Ext{{}})
+		cs.consume(r)
+		assert.Equal(t, 1, consumer.runConsumeCount)
+	})
+
+	// oq is dropped
+	t.Run("dropped after consume", func(t *testing.T) {
+		mq, oq := &message.Queue{}, newOrderProcessQueue()
+		oq.putMessages([]*message.Ext{{}, {QueueOffset: 1}})
+		oq.lockInBroker(time.Now().UnixNano())
+		r := &consumeOrderlyRequest{messageQueue: mq, processQueue: oq}
+
+		consumer.afterConsumeCallback = func() { oq.drop() }
+		consumer.runConsumeCount = 0
+		cs.consume(r)
+		assert.Equal(t, int32(1), oq.messageCount())
+		assert.Equal(t, 1, consumer.runConsumeCount)
+		consumer.runConsumeCount = 0
+		oq.dropped = processQueueStateNormal
+	})
+
+	// droped after get the consume-locker
+	t.Run("dropped after get consume locker", func(t *testing.T) {
+		mq, oq := &message.Queue{}, newOrderProcessQueue()
+		oq.lockInBroker(time.Now().UnixNano())
+		oq.putMessages([]*message.Ext{{}, {QueueOffset: 1}})
+		r := &consumeOrderlyRequest{messageQueue: mq, processQueue: oq}
+
+		oq.lockConsume()
+		oq.putMessages([]*message.Ext{{}})
+		go func() {
+			for len(oq.timeoutLocker.sem) <= 0 {
+			}
+			oq.drop()
+			oq.unLockConsume()
+		}()
+		cs.consume(r)
+		assert.Equal(t, int32(2), oq.messageCount())
+		oq.dropped = processQueueStateNormal
+		assert.Equal(t, 0, consumer.runConsumeCount)
+	})
+
+	mqLocker := cs.mqLocker.(*fakeMessageQueueLocker)
+	t.Run("unlocked after consuming", func(t *testing.T) {
+		mq, oq := &message.Queue{BrokerName: "unlocked after consuming"}, newOrderProcessQueue()
+		oq.putMessages([]*message.Ext{{}, {QueueOffset: 1}})
+		oq.lockInBroker(time.Now().UnixNano())
+		r := &consumeOrderlyRequest{messageQueue: mq, processQueue: oq}
+
+		consumer.afterConsumeCallback = func() { oq.lockedInBroker = unlockedInBroker }
+		oq.putMessages([]*message.Ext{{}, {QueueOffset: 1}})
+		assert.Equal(t, int32(2), oq.messageCount())
+		cs.consume(r)
+		assert.Equal(t, int32(1), oq.messageCount())
+		mqLocker.lockRet = []message.Queue{{}}
+		<-mqLocker.waitRunChan
+		oq.lockedInBroker = lockedInBroker
+		assert.True(t, 1 <= consumer.runConsumeCount)
+		for ; consumer.runConsumeCount != 2; mqLocker.ignoreLockWait() {
+		}
+		for ; oq.messageCount() > 0; mqLocker.ignoreLockWait() { // wait for committed
+		}
+		consumer.runConsumeCount = 0
+		oq.lockedInBroker = lockedInBroker
+	})
+
+	t.Run("locked expired and delay", func(t *testing.T) {
+		mq, oq := &message.Queue{BrokerName: "locked expired and delay"}, newOrderProcessQueue()
+		oq.putMessages([]*message.Ext{{}, {QueueOffset: 1}})
+		oq.lockInBroker(time.Now().UnixNano())
+		r := &consumeOrderlyRequest{messageQueue: mq, processQueue: oq}
+
+		assert.Equal(t, int32(2), oq.messageCount())
+		consumer.afterConsumeCallback = func() { oq.lastLockTime = 0 }
+		cs.consume(r)
+		<-mqLocker.waitRunChan
+		assert.True(t, int32(1) >= oq.messageCount())
+		assert.True(t, 1 <= consumer.runConsumeCount)
+
+		oq.lastLockTime = time.Now().UnixNano()
+		for ; consumer.runConsumeCount != 2; mqLocker.ignoreLockWait() {
+		}
+		for oq.messageCount() > 0 { // wait for committed
+		}
+		oq.lastLockTime = time.Now().UnixNano()
+	})
+
+	t.Run("consume too long", func(t *testing.T) {
+		mq, oq := &message.Queue{BrokerName: "consume too long"}, newOrderProcessQueue()
+		oq.putMessages([]*message.Ext{{}, {QueueOffset: 1}})
+		oq.lockInBroker(time.Now().UnixNano())
+		r := &consumeOrderlyRequest{messageQueue: mq, processQueue: oq}
+
+		consumer.afterConsumeCallback = nil
+		cs.maxConsumeContinuouslyTime = 0
+		oq.putMessages([]*message.Ext{{}, {QueueOffset: 1}})
+		cs.consume(r)
+		<-mqLocker.waitRunChan
+		for ; oq.messageCount() > 0; mqLocker.ignoreLockWait() { // wait for committed
+		}
+	})
+
 }
 
 func TestSubmitOrderlyRequest(t *testing.T) {

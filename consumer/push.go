@@ -29,7 +29,7 @@ const (
 	defaultPostSubscriptionWhenPull   bool          = false
 	defaultConsumeTimeout                           = 15 * time.Minute
 	defaultConsumeMessageBatchMaxSize               = 1
-	defaultPushMaxReconsumeTimes                    = -1
+	defaultPushMaxReconsumeTimes                    = (1 << 32) - 1
 )
 
 // times defined
@@ -77,8 +77,45 @@ type PushConsumer struct {
 	pullService pullRequestDispatcher
 }
 
-// NewConcurrentConsumer creates the push consumer consuming the message concurrently
-func NewConcurrentConsumer(
+// NewOrderlyConsumer creates the push consumer consuming the message orderly
+func NewOrderlyConsumer(
+	group string, namesrvAddrs []string, userConsumer OrderlyConsumer, logger log.Logger,
+) (
+	c *PushConsumer, err error,
+) {
+	if userConsumer == nil {
+		return nil, errors.New("empty consumer service")
+	}
+	c = newPushConsumer(group, namesrvAddrs, logger)
+
+	c.consumeServiceBuilder = func() (consumeService, error) {
+		cs, err := newConsumeOrderlyService(orderlyServiceConfig{
+			consumeServiceConfig: consumeServiceConfig{
+				group:           group,
+				logger:          logger,
+				messageSendBack: c,
+				offseter:        c.offsetStorer,
+			},
+			mqLocker:          c,
+			messageModel:      Clustering,
+			consumer:          userConsumer,
+			batchSize:         c.consumeBatchSize,
+			maxReconsumeTimes: c.maxReconsumeTimes,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		cs.start()
+		c.insertConsumeServiceShutdownFront(cs.shutdown)
+
+		return cs, nil
+	}
+	return
+}
+
+// NewConcurrentlyConsumer creates the push consumer consuming the message concurrently
+func NewConcurrentlyConsumer(
 	group string, namesrvAddrs []string, userConsumer ConcurrentlyConsumer, logger log.Logger,
 ) (
 	c *PushConsumer, err error,
@@ -105,12 +142,8 @@ func NewConcurrentConsumer(
 		}
 
 		cs.start()
+		c.insertConsumeServiceShutdownFront(cs.shutdown)
 
-		shutdowner := &rocketmq.ShutdownCollection{}
-		shutdowner.AddFirstFuncs(cs.shutdown)
-		shutdowner.AddLast(c.Shutdowner)
-
-		c.Shutdowner = shutdowner
 		return cs, nil
 	}
 	return
@@ -156,6 +189,14 @@ func newPushConsumer(group string, namesrvAddrs []string, logger log.Logger) *Pu
 	return c
 }
 
+func (c *PushConsumer) insertConsumeServiceShutdownFront(shutdownFunc func()) {
+	shutdowner := &rocketmq.ShutdownCollection{}
+	shutdowner.AddFirstFuncs(shutdownFunc)
+	shutdowner.AddLast(c.Shutdowner)
+
+	c.Shutdowner = shutdowner
+}
+
 func (c *PushConsumer) start() error {
 	c.logger.Info("start pull consumer")
 	err := c.checkConfig()
@@ -167,6 +208,12 @@ func (c *PushConsumer) start() error {
 
 	err = c.consumer.start()
 	if err != nil {
+		return err
+	}
+
+	err = c.client.RegisterConsumer(c)
+	if err != nil {
+		c.logger.Errorf("register PUSH consumer error:%s", err)
 		return err
 	}
 
@@ -688,4 +735,53 @@ func (c *PushConsumer) Resume() {
 
 func (c *PushConsumer) isPause() bool {
 	return atomic.LoadUint32(&c.pause) == 1
+}
+
+// Lock locks the message queues in the broker
+func (c *PushConsumer) Lock(broker string, mqs []message.Queue) ([]message.Queue, error) {
+	return c.client.LockMessageQueues(broker, c.GroupName, mqs, time.Second)
+}
+
+// Unlock unlocks the message queue in the broker
+func (c *PushConsumer) Unlock(mq message.Queue) error {
+	return c.client.UnlockMessageQueuesOneway(c.GroupName, mq.BrokerName, []message.Queue{mq})
+}
+
+// ResetOffset the offsets of the topic
+func (c *PushConsumer) ResetOffset(topic string, offsets map[message.Queue]int64) error {
+	c.Pause()
+	defer c.Resume()
+
+	mqs := c.consumeService.messageQueuesOfTopic(topic)
+	for _, mq := range mqs {
+		if _, ok := offsets[mq]; ok {
+			c.consumeService.dropAndClear(&mq)
+		}
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	for _, mq := range mqs {
+		offset, ok := offsets[mq]
+		if !ok {
+			continue
+		}
+
+		c.offsetStorer.updateOffset(&mq, offset)
+		c.offsetStorer.persistOne(&mq)
+		c.offsetStorer.removeOffset(&mq)
+		c.consumeService.dropAndRemoveProcessQueue(&mq)
+		c.consumeService.removeProcessQueue(&mq)
+	}
+
+	return nil
+}
+
+// ConsumeMessageDirectly consume the specified message notified by the broker
+func (c *PushConsumer) ConsumeMessageDirectly(
+	msg *message.Ext, group, broker string,
+) (
+	r client.ConsumeMessageDirectlyResult, err error,
+) {
+	// TODO
+	return
 }

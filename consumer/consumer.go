@@ -118,12 +118,6 @@ func (c *consumer) start() (err error) {
 		return
 	}
 
-	err = mqClient.RegisterConsumer(c)
-	if err != nil {
-		c.logger.Errorf("register producer error:%s", err.Error())
-		return
-	}
-
 	err = mqClient.Start()
 	if err != nil {
 		c.logger.Errorf("start mq client error:%s", err)

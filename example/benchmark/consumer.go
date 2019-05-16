@@ -149,7 +149,7 @@ func (bc *bconsumer) run(args []string) {
 
 	stati := statiBenchmarkConsumerSnapshot{}
 
-	c, err := consumer.NewConcurrentConsumer(
+	c, err := consumer.NewConcurrentlyConsumer(
 		groupID, strings.Split(bc.nameSrv, ","), &concurrentlyConsumer{stati: &stati}, logger,
 	)
 	c.FromWhere = consumer.ConsumeFromFirstOffset

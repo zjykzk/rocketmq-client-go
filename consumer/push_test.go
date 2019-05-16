@@ -31,7 +31,7 @@ func (d *fakePullRequestDispatcher) submitRequestLater(r *pullRequest, delay tim
 }
 
 func newTestConcurrentConsumer() *PushConsumer {
-	pc, err := NewConcurrentConsumer(
+	pc, err := NewConcurrentlyConsumer(
 		"test-push-consumer", []string{"dummy"}, &fakeConcurrentlyConsumer{}, log.Std,
 	)
 	pc.client = &fakeMQClient{}
@@ -326,7 +326,7 @@ func TestPushPull(t *testing.T) {
 	pq.drop()
 	c.pull(pr)
 	assert.Equal(t, int64(0), pq.lastPullTime)
-	pq.dropped = normal
+	pq.dropped = processQueueStateNormal
 
 	// bad state
 	pullService := c.pullService.(*fakePullRequestDispatcher)
@@ -460,4 +460,28 @@ func TestStartAndShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Shutdown()
+}
+
+func TestPushResetOffset(t *testing.T) {
+	c := newTestConcurrentConsumer()
+	offseter, consumerService := &fakeOffsetStorer{}, &fakeConsumerService{}
+	c.offsetStorer, c.consumeService = offseter, consumerService
+
+	// no message queue
+	c.ResetOffset("TestPushResetOffset", nil)
+	assert.False(t, consumerService.runDropAndClear)
+
+	// message queue
+	consumerService.queues = []message.Queue{{}}
+	c.ResetOffset("TestPushResetOffset", map[message.Queue]int64{message.Queue{}: 1})
+	assert.True(t, consumerService.runDropAndClear)
+
+	// update offset store
+	consumerService.queues = []message.Queue{{}, {QueueID: 1}}
+	c.ResetOffset("TestPushResetOffset", map[message.Queue]int64{message.Queue{}: 1})
+	assert.True(t, offseter.runUpdate)
+	assert.True(t, offseter.runPersistOne)
+	assert.True(t, offseter.runRemoveOffset)
+	assert.True(t, consumerService.runDropAndRemoveProcessQueue)
+	assert.True(t, consumerService.runRemoveProcessQueue)
 }

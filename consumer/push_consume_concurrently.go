@@ -339,6 +339,19 @@ func (cs *consumeConcurrentlyService) flowControl(q *processQueue) bool {
 }
 
 func (cs *consumeConcurrentlyService) check(*processQueue) error {
+	return nil // DO NOTHING
+}
+
+func (cs *consumeConcurrentlyService) dropAndClear(mq *message.Queue) error {
+	v, ok := cs.processQueues.Load(*mq)
+	if !ok {
+		return errors.New("no process table in the concurrent service")
+	}
+
+	q := v.(*concurrentProcessQueue)
+	q.drop()
+	q.clear()
+
 	return nil
 }
 
@@ -368,4 +381,11 @@ func (cpq *concurrentProcessQueue) removeIfMinOffset(of int64) (ok bool) {
 	}
 	cpq.Unlock()
 	return
+}
+
+func (cpq *concurrentProcessQueue) clear() {
+	cpq.Lock()
+	cpq.messages.Clear()
+	cpq.nextQueueOffset = 0
+	cpq.Unlock()
 }

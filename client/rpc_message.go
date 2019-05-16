@@ -100,7 +100,7 @@ func (c *MQClient) RegisterFilter(group string, subData *SubscribeData) error {
 
 	broker := brokers[rand.Intn(count)]
 	return rpc.RegisterFilter(
-		c.Client, broker.SelectAddress(), group, c.clientID, (*rpc.SubscribeData)(subData), time.Second*3,
+		c.Client, broker.SelectAddress(), group, c.clientID, (*rpc.SubscribeData)(subData), 3*time.Second,
 	)
 }
 
@@ -112,10 +112,14 @@ func (c *MQClient) PullMessageAsync(
 }
 
 // LockMessageQueues send lock message queue request to the broker
-func (c *MQClient) LockMessageQueues(broker, group string, queues []message.Queue, to time.Duration) error {
+func (c *MQClient) LockMessageQueues(
+	broker, group string, queues []message.Queue, to time.Duration,
+) (
+	[]message.Queue, error,
+) {
 	r, err := c.FindBrokerAddr(broker, rocketmq.MasterID, true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return rpc.LockMessageQueues(c.Client, r.Addr, group, c.clientID, queues, to)
 }

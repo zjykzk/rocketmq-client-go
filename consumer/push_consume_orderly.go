@@ -186,12 +186,25 @@ func (cs *consumeOrderlyService) getMQsGroupByBroker() []mqsOfBroker {
 func (cs *consumeOrderlyService) insertNewMessageQueue(mq *message.Queue) (
 	pq *processQueue, ok bool,
 ) {
+	lockedMQs, err := cs.mqLocker.Lock(mq.BrokerName, []message.Queue{*mq})
+	if err != nil {
+		cs.logger.Errorf("lock the message queue:%s, error:%s", mq, err)
+		return nil, false
+	}
+
+	if len(lockedMQs) == 0 {
+		cs.logger.Errorf("lock the message queue:%s failed", mq)
+		return nil, false
+	}
+
 	cpq := newOrderProcessQueue()
 	_, ok = cs.processQueues.LoadOrStore(*mq, cpq)
 	if ok {
 		cs.logger.Infof("message queue:%s exist", mq)
 		return nil, false
 	}
+
+	cpq.lockInBroker(time.Now().UnixNano())
 	return &cpq.processQueue, true
 }
 
@@ -221,6 +234,10 @@ func (cs *consumeOrderlyService) dropPullExpiredProcessQueues() {
 		oqs, mqs = append(oqs, pq), append(mqs, k.(message.Queue))
 		return true
 	})
+
+	for _, oq := range oqs {
+		oq.drop()
+	}
 
 	for i := range oqs {
 		cs.unlockProcessQueueInBroker(mqs[i], oqs[i], time.Second)
@@ -299,7 +316,7 @@ func (cs *consumeOrderlyService) consume(r *consumeOrderlyRequest) {
 
 		pq.lockConsume()
 		if pq.isDropped() { // the lock operation may supsend the current goroutine
-			cs.logger.Infof("[%s] process queue is DROPPED, give up the consuming", mq)
+			cs.logger.Infof("[%s] process queue is DROPPED after consume locker", mq)
 			pq.unLockConsume()
 			break
 		}
@@ -320,14 +337,34 @@ func (cs *consumeOrderlyService) consume(r *consumeOrderlyRequest) {
 			break
 		}
 
-		if !cs.canContinue(r, start) {
+		if !cs.isLockedInBroker(r, start) {
 			cs.lockAndConsumeLater(r, 10*time.Millisecond)
+			break
+		}
+
+		consumeTime := time.Since(start)
+		if consumeTime >= cs.maxConsumeContinuouslyTime {
+			cs.logger.Infof(
+				"[%s] CONSUME TOO LONG %s, max:%s, try later", consumeTime, cs.maxConsumeContinuouslyTime, mq,
+			)
+			cs.submitRequestLater(r, 10*time.Millisecond)
 			break
 		}
 	}
 }
 
-func (cs *consumeOrderlyService) canContinue(r *consumeOrderlyRequest, start time.Time) bool {
+func (cs *consumeOrderlyService) lockAndConsumeLater(r *consumeOrderlyRequest, delay time.Duration) {
+	cs.scheduler.scheduleFuncAfter(func() {
+		mqs, err := cs.mqLocker.Lock(r.messageQueue.BrokerName, []message.Queue{*r.messageQueue})
+		delay := 3 * time.Second // delay for the process queue is filled with message
+		if len(mqs) == 1 && err == nil {
+			delay = 10 * time.Millisecond
+		}
+		cs.submitRequestLater(r, delay)
+	}, delay)
+}
+
+func (cs *consumeOrderlyService) isLockedInBroker(r *consumeOrderlyRequest, start time.Time) bool {
 	pq, mq := r.processQueue, r.messageQueue
 
 	isClustering := cs.messageModel == Clustering
@@ -341,26 +378,7 @@ func (cs *consumeOrderlyService) canContinue(r *consumeOrderlyRequest, start tim
 		return false
 	}
 
-	consumeTime := time.Since(start)
-	if consumeTime >= cs.maxConsumeContinuouslyTime {
-		cs.logger.Infof(
-			"[%s] CONSUME TOO LONG %s, max:%s, try later", consumeTime, cs.maxConsumeContinuouslyTime, mq,
-		)
-		return false
-	}
-
 	return true
-}
-
-func (cs *consumeOrderlyService) lockAndConsumeLater(r *consumeOrderlyRequest, delay time.Duration) {
-	cs.scheduler.scheduleFuncAfter(func() {
-		mqs, err := cs.mqLocker.Lock(r.messageQueue.BrokerName, []message.Queue{*r.messageQueue})
-		delay := 3 * time.Second // delay for the process queue is filled with message
-		if len(mqs) == 1 && err == nil {
-			delay = 10 * time.Millisecond
-		}
-		cs.submitRequestLater(r, delay)
-	}, delay)
 }
 
 func (cs *consumeOrderlyService) submitRequestLater(r *consumeOrderlyRequest, delay time.Duration) {
@@ -483,6 +501,28 @@ func (cs *consumeOrderlyService) incReconsumeTimesIfNotOverLimit(msgs []*message
 	return
 }
 
+func (cs *consumeOrderlyService) submitConsumeRequest(
+	_ []*message.Ext, pq *processQueue, mq *message.Queue,
+) {
+	cs.submitRequest(&consumeOrderlyRequest{
+		processQueue: (*orderProcessQueue)(unsafe.Pointer(pq)),
+		messageQueue: mq,
+	})
+}
+
+func (cs *consumeOrderlyService) dropAndClear(mq *message.Queue) error {
+	v, ok := cs.processQueues.Load(*mq)
+	if !ok {
+		return errors.New("no process table in the order service")
+	}
+
+	q := v.(*orderProcessQueue)
+	q.clear()
+	q.drop()
+
+	return nil
+}
+
 func newOrderProcessQueue() *orderProcessQueue {
 	return &orderProcessQueue{
 		timeoutLocker:     newTimeoutLocker(),
@@ -515,6 +555,7 @@ func (q *orderProcessQueue) lockInBroker(timeNano int64) bool {
 	atomic.StoreInt64(&q.lastLockTime, timeNano)
 	return ok
 }
+
 func (q *orderProcessQueue) isLockedInBrokerExpired(timeout time.Duration) bool {
 	return time.Now().UnixNano()-atomic.LoadInt64(&q.lastLockTime) >= int64(timeout)
 }
@@ -590,4 +631,15 @@ func (q *orderProcessQueue) commit() int64 {
 
 func (q *orderProcessQueue) clearConsumingMessages() {
 	q.consumingMessages = make(map[offset]*message.Ext, 8)
+}
+
+func (q *orderProcessQueue) clear() {
+	q.Lock()
+	q.consumingMessages = nil
+	q.messages.Clear()
+	q.nextQueueOffset = 0
+	q.Unlock()
+
+	atomic.StoreInt64(&q.msgSize, 0)
+	atomic.StoreInt32(&q.msgCount, 0)
 }

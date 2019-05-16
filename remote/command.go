@@ -23,6 +23,7 @@ const (
 
 const (
 	responsType    = 1
+	oneway         = 2
 	commandFlag    = 0
 	commandVersion = 252
 )
@@ -55,12 +56,22 @@ func (cmd *Command) ID() int64 {
 	return int64(cmd.Opaque)
 }
 
-func (cmd *Command) isResponseType() bool {
+func (cmd *Command) isResponse() bool {
 	return cmd.Flag&(responsType) == responsType
 }
 
-func (cmd *Command) markResponseType() {
+// MarkResponse mark the command as response
+func (cmd *Command) MarkResponse() {
 	cmd.Flag = (cmd.Flag | responsType)
+}
+
+// IsOneway returns true if the command is oneway, otherwise false
+func (cmd *Command) IsOneway() bool {
+	return (cmd.Flag & oneway) == oneway
+}
+
+func (cmd *Command) markOneway() {
+	cmd.Flag |= oneway
 }
 
 //NewCommand create command with empty body

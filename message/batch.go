@@ -65,7 +65,7 @@ func (b *Batch) isConsistentWaitStoreOK() (wait bool, ok bool) {
 func (b *Batch) setUniqID() {
 	for i := range b.Datas {
 		d := &b.Datas[i]
-		if d.Properties != nil {
+		if d.Properties == nil {
 			d.Properties = map[string]string{}
 		}
 		d.Properties[PropertyUniqClientMessageIDKeyidx] = CreateUniqID()

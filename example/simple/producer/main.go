@@ -2,31 +2,31 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/zjykzk/rocketmq-client-go/log"
+	"github.com/zjykzk/rocketmq-client-go/producer"
 )
 
 var (
 	namesrvAddrs string
-	group        string
-	tags         string
 	topic        string
-	isPull       bool
+	group        string
+	batch        bool
 )
 
 func init() {
 	flag.StringVar(&namesrvAddrs, "n", "", "name server address")
-	flag.BoolVar(&isPull, "m", true, "pull if true, else push")
 	flag.StringVar(&topic, "t", "", "topic")
 	flag.StringVar(&group, "g", "", "group")
-	flag.StringVar(&tags, "a", "", "tags")
+	flag.BoolVar(&batch, "b", false, "is send batch")
 }
 
-// push consumer: go run -n 10.20.200.198:9988 -m=false -t=topic_name
-// pull consumer: go run -n 10.20.200.198:9988 -m=true -t=topic_name
 func main() {
 	flag.Parse()
 
@@ -40,11 +40,52 @@ func main() {
 		return
 	}
 
-	if isPull {
-		runPull()
-	} else {
-		runPush()
+	logger, err := newLogger("producer.log")
+	if err != nil {
+		fmt.Printf("new logger of producer.loge error:%s\n", err)
+		return
 	}
+
+	p := producer.New(group, strings.Split(namesrvAddrs, ","), logger)
+	err = p.Start()
+	if err != nil {
+		fmt.Printf("start producer error:%s\n", err)
+		return
+	}
+
+	defer p.Shutdown()
+
+	exitCh := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+
+				var (
+					r   *producer.SendResult
+					err error
+				)
+				if batch {
+					r, err = sendBatch(p)
+				} else {
+					r, err = sendSimple(p)
+				}
+
+				if err != nil {
+					fmt.Printf("%s send sync error:%s\n", time.Now(), err)
+					break
+				}
+				fmt.Printf("send suc:%s\n", r)
+			case <-exitCh:
+				return
+			}
+		}
+	}()
+
+	waitQuitSignal(func() { close(exitCh) })
 }
 
 func newLogger(filename string) (log.Logger, error) {

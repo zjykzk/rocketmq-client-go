@@ -203,6 +203,29 @@ func (a *Admin) GetConsumerIDs(addr, group string) ([]string, error) {
 	return a.client.GetConsumerIDs(addr, group, time.Second*3)
 }
 
+// ResetConsumeOffset requests the broker to reset the offsets of the specified topic, the offsets' owner
+// is specified by the group
+func (a *Admin) ResetConsumeOffset(
+	broker, topic, group string, timestamp time.Time, isForce bool,
+) (
+	map[message.Queue]int64, error,
+) {
+	addr, err := a.client.FindBrokerAddr(broker, rocketmq.MasterID, true)
+	if err != nil {
+		err = a.client.UpdateTopicRouterInfoFromNamesrv(topic)
+		if err != nil {
+			return nil, err
+		}
+
+		addr, err = a.client.FindBrokerAddr(broker, rocketmq.MasterID, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return a.client.ResetConsumeOffset(addr.Addr, topic, group, timestamp, isForce, 3*time.Second)
+}
+
 // TopicFilter details
 type TopicFilter int8
 

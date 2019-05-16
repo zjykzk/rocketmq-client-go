@@ -11,9 +11,12 @@ import (
 	"github.com/zjykzk/rocketmq-client-go"
 	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
+	"github.com/zjykzk/rocketmq-client-go/message"
 	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
 )
+
+type processor func(*remote.ChannelContext, *remote.Command) (*remote.Command, error)
 
 // MQClient the client commuicate with broker
 // it's shared by all consumer & producer with the same client id
@@ -38,6 +41,8 @@ type MQClient struct {
 	brokerVersions brokerVersionTable
 
 	routersOfTopic *route.TopicRouterTable
+
+	processors map[remote.Code]processor
 
 	logger log.Logger
 }
@@ -71,13 +76,15 @@ func newMQClient(config *Config, clientID string, logger log.Logger) (c *MQClien
 		clientID:       clientID,
 		exitChan:       make(chan struct{}),
 		consumers:      consumerColl{eles: make(map[string]Consumer)},
-		producers:      producerColl{eles: make(map[string]Producer)},
+		producers:      producerColl{producers: make(map[string]Producer)},
 		admins:         adminColl{eles: make(map[string]Admin)},
 		brokerAddrs:    brokerAddrTable{table: make(map[string]map[int32]string)},
 		brokerVersions: brokerVersionTable{table: make(map[string]map[string]int32)},
 		routersOfTopic: route.NewTopicRouterTable(),
 		logger:         logger,
 	}
+
+	c.initProcessor()
 
 	c.Config = *config
 	if c.HeartbeatBrokerInterval <= 0 {
@@ -569,36 +576,170 @@ OUT:
 	return r
 }
 
-func (c *MQClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) bool {
-	switch cmd.Code {
-	case rpc.NotifyConsumerIdsChanged:
-		for _, co := range c.consumers.coll() {
-			co.ReblanceQueue()
-		}
-	case rpc.CheckTransactionState:
-	case rpc.ResetConsumerClientOffset:
-	case rpc.GetConsumerStatusFromClient:
-	case rpc.GetConsumerRunningInfo:
-		group := cmd.ExtFields["consumerGroup"]
-		co := c.consumers.get(group)
-		if co == nil {
-			c.logger.Errorf("no consumer of group:%s", group)
-			cmd.Code = rpc.SystemError
-			cmd.Remark = fmt.Sprintf("The Consumer Group <%s> not exist in this consumer", group)
-		} else {
-			info := co.RunningInfo()
-			cmd.Body, _ = json.Marshal(info)
-			cmd.Code = rpc.Success
-			cmd.Remark = ""
-		}
-		cmd, err := c.Client.RequestSync(ctx.Address, cmd, time.Second)
-		c.logger.Debugf("GetConsumerRunningInfo result:%s, err:%v", cmd, err)
-	case rpc.ConsumeMessageDirectly:
-	default:
-		return false
+func (c *MQClient) initProcessor() {
+	c.processors = map[remote.Code]processor{
+		rpc.NotifyConsumerIdsChanged:    c.consumerIDsChanged,
+		rpc.CheckTransactionState:       c.checkTransactionState,
+		rpc.ResetConsumerClientOffset:   c.resetOffset,
+		rpc.GetConsumerStatusFromClient: c.getConsumerStatusFromClient,
+		rpc.GetConsumerRunningInfo:      c.getConsumerRunningInfo,
+		rpc.ConsumeMessageDirectly:      c.consumeMessageDirectly,
 	}
-	c.logger.Debugf("process Request:%v", cmd)
-	return true
+}
+
+func (c *MQClient) processRequest(ctx *remote.ChannelContext, cmd *remote.Command) (processed bool) {
+	proc, ok := c.processors[cmd.Code]
+	if !ok {
+		return
+	}
+
+	c.logger.Debugf("processed Request:%v", cmd)
+
+	processed = true
+	resp, err := proc(ctx, cmd)
+
+	if err != nil {
+		c.logger.Errorf("process error:%s", err)
+	}
+
+	if cmd.IsOneway() {
+		return
+	}
+
+	if resp == nil {
+		return
+	}
+
+	resp.Opaque = cmd.Opaque
+	resp.MarkResponse()
+	cmd, err = c.Client.RequestSync(ctx.Address, resp, 3*time.Second)
+	c.logger.Debugf("send response result:%s, err:%v", cmd, err)
+
+	return
+}
+
+func (c *MQClient) checkTransactionState(ctx *remote.ChannelContext, cmd *remote.Command) (
+	resp *remote.Command, err error,
+) {
+	return // TODO
+}
+
+func (c *MQClient) consumerIDsChanged(ctx *remote.ChannelContext, cmd *remote.Command) (
+	resp *remote.Command, err error,
+) {
+	c.logger.Infof(
+		"receive broker's notification[%s], the consumer group: %s changed, rebalance immediately",
+		ctx.String(), cmd.ExtFields["group"],
+	)
+
+	for _, co := range c.consumers.coll() {
+		co.ReblanceQueue()
+	}
+	return
+}
+
+func (c *MQClient) getConsumerRunningInfo(ctx *remote.ChannelContext, cmd *remote.Command) (
+	resp *remote.Command, err error,
+) {
+	group := cmd.ExtFields["consumerGroup"]
+	co := c.consumers.get(group)
+	if co == nil {
+		c.logger.Errorf("no consumer of group:%s", group)
+		resp = remote.NewCommand(rpc.SystemError, nil)
+		resp.Remark = fmt.Sprintf("The Consumer Group <%s> not exist in this consumer", group)
+		return
+	}
+
+	info := co.RunningInfo()
+	data, err := json.Marshal(info)
+	if err != nil {
+		c.logger.Errorf("marshal running info error:%s", err)
+		return
+	}
+
+	resp = remote.NewCommandWithBody(rpc.Success, nil, data)
+	return
+}
+
+func (c *MQClient) resetOffset(ctx *remote.ChannelContext, cmd *remote.Command) (
+	resp *remote.Command, err error,
+) {
+	topic, group := cmd.ExtFields["topic"], cmd.ExtFields["group"]
+	timestamp, isForce := cmd.ExtFields["timestamp"], cmd.ExtFields["isForce"]
+	c.logger.Infof(
+		"invoke reset offset operation from broker:%s.topic:%s,group:%s,timestamp:%s, isForce:%s",
+		ctx.String(), topic, group, timestamp, isForce,
+	)
+
+	if len(cmd.Body) == 0 {
+		c.logger.Info("reset offset, but empty body")
+		return
+	}
+
+	offsets, err := parseResetOffsetRequest(string(cmd.Body))
+	if err != nil {
+		c.logger.Errorf("parse reset offsets error:%s", err)
+		return
+	}
+
+	consumer := c.consumers.get(group)
+	if consumer == nil {
+		return
+	}
+
+	err = consumer.ResetOffset(topic, offsets)
+	if err != nil {
+		c.logger.Errorf("consumer of group:%s reset offset error:%s", group, err)
+	}
+	return
+}
+
+func (c *MQClient) consumeMessageDirectly(ctx *remote.ChannelContext, cmd *remote.Command) (
+	resp *remote.Command, err error,
+) {
+	ms, err := message.Decode(cmd.Body)
+	if err != nil {
+		c.logger.Errorf("decode message error:%s", err)
+		return
+	}
+
+	if len(ms) != 1 {
+		err = fmt.Errorf("bad message count:%d", len(ms))
+		c.logger.Error(err.Error())
+		return
+	}
+
+	group := cmd.ExtFields["consumerGroup"]
+	co := c.consumers.get(group)
+	if co == nil {
+		c.logger.Errorf("no consumer of group:%s", group)
+		resp = remote.NewCommand(rpc.SystemError, nil)
+		resp.Remark = fmt.Sprintf("The Consumer Group <%s> not exist in this consumer", group)
+		return
+	}
+
+	broker := cmd.ExtFields["brokerName"]
+	result, err := co.ConsumeMessageDirectly(ms[0], group, broker)
+	if err != nil {
+		resp = remote.NewCommand(rpc.SystemError, nil)
+		resp.Remark = fmt.Sprintf("consume %s failed by consumer of group '%s'", ms[0], group)
+		return
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		c.logger.Errorf("marshal consume directly error:%s", err)
+		return
+	}
+
+	resp = remote.NewCommandWithBody(rpc.Success, nil, data)
+	return
+}
+
+func (c *MQClient) getConsumerStatusFromClient(ctx *remote.ChannelContext, cmd *remote.Command) (
+	resp *remote.Command, err error,
+) {
+	return // TODO
 }
 
 // AdminCount return the registered admin count

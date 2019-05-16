@@ -70,6 +70,13 @@ func (c *PullConsumer) start() error {
 		c.logger.Errorf("start consumer error:%s", err)
 		return err
 	}
+
+	err = c.client.RegisterConsumer(c)
+	if err != nil {
+		c.logger.Errorf("register PULL consumer error:%s", err)
+		return err
+	}
+
 	c.subscribe()
 
 	c.logger.Infof("start pull consumer:%s success", c.GroupName)
@@ -188,7 +195,8 @@ func (c *PullConsumer) pullSync(
 			SubVersion:           0,
 			ExpressionType:       ExprTypeTag.String(),
 		},
-		c.pullTimeout)
+		c.pullTimeout,
+	)
 	if err != nil {
 		c.logger.Errorf("pull message sync error:%s", err)
 		return nil, err
@@ -229,4 +237,18 @@ func dToMsStr(d time.Duration) string {
 func (c *PullConsumer) Register(topics []string, listener MessageQueueChanger) {
 	c.registerTopics = topics
 	c.messageQueueChanger = listener
+}
+
+// ResetOffset NOOPS
+func (c *PullConsumer) ResetOffset(topic string, offsets map[message.Queue]int64) error {
+	return nil // empty
+}
+
+// ConsumeMessageDirectly NOOPS
+func (c *PullConsumer) ConsumeMessageDirectly(
+	msg *message.Ext, group, broker string,
+) (
+	r client.ConsumeMessageDirectlyResult, err error,
+) {
+	return
 }

@@ -136,3 +136,7 @@ func (cs *baseConsumeService) dropAndRemoveProcessQueue(mq *message.Queue) bool 
 	cs.processQueues.Delete(*mq)
 	return true
 }
+
+func (cs *baseConsumeService) removeProcessQueue(mq *message.Queue) {
+	cs.processQueues.Delete(*mq)
+}

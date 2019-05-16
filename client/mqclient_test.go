@@ -2,10 +2,14 @@ package client
 
 import (
 	"errors"
+	"net"
 	"sort"
+	"strings"
 	"testing"
 
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
 	"github.com/zjykzk/rocketmq-client-go/log"
+	"github.com/zjykzk/rocketmq-client-go/remote"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -38,10 +42,10 @@ func TestMQClient(t *testing.T) {
 
 	t.Run("[un]register consumer", func(t *testing.T) {
 		assert.NotNil(t, client.RegisterConsumer(&fakeConsumer{}))
-		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{"group"}))
-		assert.NotNil(t, client.RegisterConsumer(&fakeConsumer{"group"}))
+		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{group: "group"}))
+		assert.NotNil(t, client.RegisterConsumer(&fakeConsumer{group: "group"}))
 		assert.Equal(t, 1, client.ConsumerCount())
-		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{"1group"}))
+		assert.Nil(t, client.RegisterConsumer(&fakeConsumer{group: "1group"}))
 		assert.Equal(t, 2, client.ConsumerCount())
 
 		client.UnregisterConsumer("group")
@@ -81,7 +85,7 @@ func TestMQClient(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = client1.RegisterProducer(&fakeProducer{"p1"})
-		mc := &fakeConsumer{"c0"}
+		mc := &fakeConsumer{group: "c0"}
 		client1.RegisterConsumer(mc)
 
 		hd := client1.prepareHeartbeatData()
@@ -156,4 +160,85 @@ func TestMQClient(t *testing.T) {
 		updated, _ = client.updateTopicRouterInfoFromNamesrv("t")
 		assert.True(t, updated)
 	})
+}
+
+func TestResetOffset(t *testing.T) {
+	client, err := New(&Config{NameServerAddrs: []string{"addr"}}, "clientid", log.Std)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc := &fakeConsumer{group: "TestResetOffset"}
+	err = client.RegisterConsumer(fc)
+	assert.Nil(t, err)
+
+	conn, _ := net.Pipe()
+	defer conn.Close()
+	ctx := &remote.ChannelContext{Conn: conn}
+
+	// no body
+	client.resetOffset(ctx, &remote.Command{})
+	assert.False(t, fc.runResetOffset)
+
+	// bad offsets
+	client.resetOffset(ctx, &remote.Command{Body: []byte("}")})
+	assert.False(t, fc.runResetOffset)
+
+	// no consumer
+	fc.resetOffsetErr = errors.New("reset failed")
+	client.resetOffset(ctx, &remote.Command{Body: []byte("{}")})
+	assert.False(t, fc.runResetOffset)
+
+	// OK
+	client.resetOffset(ctx, &remote.Command{
+		Body:      []byte("{}"),
+		ExtFields: map[string]string{"group": fc.group, "topic": "TestResetOffsetTopic"},
+	})
+	assert.True(t, fc.runResetOffset)
+	assert.Equal(t, "TestResetOffsetTopic", fc.resetTopicOfOffset)
+}
+
+func TestConsumeMessageDirectly(t *testing.T) {
+	client, err := New(&Config{NameServerAddrs: []string{"addr"}}, "clientid", log.Std)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fc := &fakeConsumer{group: "TestConsumeMessageDirectly"}
+	err = client.RegisterConsumer(fc)
+	assert.Nil(t, err)
+
+	conn, _ := net.Pipe()
+	ctx := &remote.ChannelContext{Conn: conn}
+
+	// decode error
+	resp, err := client.consumeMessageDirectly(ctx, remote.NewCommandWithBody(0, nil, []byte{'1'}))
+	assert.NotNil(t, err)
+
+	// no message
+	resp, err = client.consumeMessageDirectly(ctx, remote.NewCommandWithBody(0, nil, nil))
+	assert.Equal(t, 0, strings.Index(err.Error(), "bad message count"))
+
+	//
+	// data is the result of encoding message following it
+	//
+	//
+	// message.Ext{
+	//  	Message:   message.Message{Topic: "TestConsumeDirectly"},
+	//  	MsgID:     "id",
+	//  	BornHost:  message.Addr{Port: 9090},
+	//  	StoreHost: message.Addr{Port: 9090},
+	// }
+
+	data := []byte{
+		0, 0, 0, 110, 218, 163, 32, 167, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 19, 84, 101, 115, 116, 67, 111, 110, 115, 117, 109, 101, 68, 105, 114, 101, 99, 116, 108, 121, 0, 0,
+	}
+	// no consumer
+	resp, err = client.consumeMessageDirectly(ctx, remote.NewCommandWithBody(0, nil, data))
+	assert.Nil(t, err)
+	assert.Equal(t, int(rpc.SystemError), int(resp.Code))
+	assert.Equal(t, 0, strings.Index(resp.Remark, "The Consumer Group"))
+
+	cmd := remote.NewCommandWithBody(0, nil, data)
+	cmd.ExtFields = map[string]string{"consumerGroup": "TestConsumeMessageDirectly"}
 }

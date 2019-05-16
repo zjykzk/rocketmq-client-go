@@ -129,3 +129,13 @@ func (c *fakeMQClient) SearchOffsetByTimestamp(addr, topic string, queueID uint8
 func (c *fakeMQClient) RegisterFilter(group string, subData *client.SubscribeData) error {
 	return nil
 }
+func (c *fakeMQClient) LockMessageQueues(
+	broker, group string, queues []message.Queue, to time.Duration,
+) (
+	[]message.Queue, error,
+) {
+	return nil, nil
+}
+func (c *fakeMQClient) UnlockMessageQueuesOneway(group, broker string, queues []message.Queue) error {
+	return nil
+}
