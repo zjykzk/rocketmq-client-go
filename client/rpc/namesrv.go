@@ -2,8 +2,10 @@ package rpc
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/zjykzk/rocketmq-client-go/remote"
 	"github.com/zjykzk/rocketmq-client-go/route"
@@ -83,4 +85,96 @@ func GetTopicRouteInfo(client remote.Client, addr string, topic string, to time.
 		return nil, dataError(e)
 	}
 	return
+}
+
+func readFields(str string) (map[string]string, error) {
+	return nil, nil // TODO
+}
+
+func readString(d []byte) ([]byte, int, error) {
+	s, e := -1, -1
+	l := len(d)
+	for i := 0; i < l; i++ {
+		if d[i] == '"' {
+			if i > 0 && d[i-1] == '\\' {
+				continue
+			}
+			s = i
+			break
+		}
+	}
+
+	for i := s + 1; i < l; i++ {
+		if d[i] == '"' {
+			if i > 0 && d[i-1] == '\\' {
+				continue
+			}
+			e = i
+			break
+		}
+	}
+
+	if s == -1 || e == -1 {
+		return nil, e, errors.New("[BUG] cannot process string:" + string(d))
+	}
+
+	return d[s+1 : e], e + 1, nil
+}
+
+func readNumber(d []byte) ([]byte, int, error) {
+	for i, n := range d {
+		switch {
+		case n >= '0' && n <= '9':
+		case n == '-' || n == '+':
+		case n == 'e' || n == 'E':
+		case n == '.':
+		default:
+			if i == 0 {
+				return nil, 0, errors.New("[BUG] cannot process number:" + string(d))
+			}
+
+			return d[0:i], i, nil
+		}
+	}
+
+	return d, len(d), nil
+}
+
+func readArray(d []byte) ([]byte, int, error) {
+	for i, l := 0, len(d); i < l; {
+		switch n := d[i]; {
+		case n == '[' || n == ',' || unicode.IsSpace(rune(n)):
+			i++
+		case n == ']':
+			return d[:i+1], i + 1, nil
+		case (n >= '0' && n <= '9') || n == '-':
+			_, k, err := readNumber(d[i:])
+			if err != nil {
+				return nil, 0, err
+			}
+
+			i += k
+		case n == '"':
+			_, k, err := readString(d[i:])
+			if err != nil {
+				return nil, 0, err
+			}
+			i += k
+		default:
+			return nil, 0, errors.New("[BUG] cannot process array:" + string(d) + ", char:" + string(n))
+		}
+	}
+
+	return nil, 0, errors.New("[BUG] cannot process array:" + string(d))
+}
+
+func readObject(d []byte) ([]byte, int, error) {
+	return nil, 0, nil // TODO
+}
+
+func firstNotSpace(d []byte) int {
+	s := 0
+	for ; unicode.IsSpace(rune(d[s])); s++ {
+	}
+	return s
 }
