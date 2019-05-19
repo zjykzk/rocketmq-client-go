@@ -13,7 +13,7 @@ func TestReadString(t *testing.T) {
 	assert.Equal(t, "a", string(s))
 	assert.Equal(t, 3, i)
 
-	d = []byte(`   "a\"  "`)
+	d = []byte(` "a\"  "`)
 	s, i, err = readString(d)
 	assert.Nil(t, err)
 	assert.Equal(t, `a\"  `, string(s))
@@ -112,6 +112,34 @@ func TestReadArray(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, `[1, -1]`, string(n))
 	assert.Equal(t, 7, i)
+
+	d = []byte(`[{}]`)
+	n, i, err = readArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, `[{}]`, string(n))
+	assert.Equal(t, 4, i)
+
+	d = []byte(`[{},{1:2}]`)
+	n, i, err = readArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, `[{},{1:2}]`, string(n))
+	assert.Equal(t, 10, i)
+
+	d = []byte(`[}]`)
+	n, i, err = readArray(d)
+	assert.NotNil(t, err)
+
+	d = []byte(`["]`)
+	n, i, err = readArray(d)
+	assert.NotNil(t, err)
+
+	d = []byte(`[1"]`)
+	n, i, err = readArray(d)
+	assert.NotNil(t, err)
+
+	d = []byte(`[`)
+	n, i, err = readArray(d)
+	assert.NotNil(t, err)
 }
 
 func TestReadObject(t *testing.T) {
@@ -121,11 +149,11 @@ func TestReadObject(t *testing.T) {
 	assert.Equal(t, "{}", string(n))
 	assert.Equal(t, 2, i)
 
-	d = []byte(`{1:2}`)
+	d = []byte(`{1: 2}`)
 	n, i, err = readObject(d)
 	assert.Nil(t, err)
-	assert.Equal(t, "{1:2}", string(n))
-	assert.Equal(t, 5, i)
+	assert.Equal(t, "{1: 2}", string(n))
+	assert.Equal(t, 6, i)
 
 	d = []byte(`{1:2,2:3}`)
 	n, i, err = readObject(d)
@@ -150,6 +178,18 @@ func TestReadObject(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, `{{1:2}:2}`, string(n))
 	assert.Equal(t, 9, i)
+
+	d = []byte(`{`)
+	n, i, err = readObject(d)
+	assert.NotNil(t, err)
+
+	d = []byte(`{1"}`)
+	n, i, err = readObject(d)
+	assert.NotNil(t, err)
+
+	//d = []byte(`{,}`) // CANNOT parsed TODO
+	//n, i, err = readObject(d)
+	//assert.NotNil(t, err)
 }
 
 func TestParseObject(t *testing.T) {
@@ -182,4 +222,63 @@ func TestParseObject(t *testing.T) {
 	m, err = ParseObject(d)
 	assert.Nil(t, err)
 	assert.Equal(t, []byte(`{"2":1}`), m["1"])
+}
+
+func TestParseArray(t *testing.T) {
+	d := []byte(" []")
+	a, err := ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(a))
+
+	d = []byte("[1]")
+	a, err = ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(a))
+	assert.Equal(t, "1", string(a[0]))
+
+	d = []byte("[1,  2]")
+	a, err = ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(a))
+	assert.Equal(t, "1", string(a[0]))
+	assert.Equal(t, "2", string(a[1]))
+
+	d = []byte(`["1"]`)
+	a, err = ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(a))
+	assert.Equal(t, "1", string(a[0]))
+
+	d = []byte(`["1","2"]`)
+	a, err = ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(a))
+	assert.Equal(t, "1", string(a[0]))
+	assert.Equal(t, "2", string(a[1]))
+
+	d = []byte(`[[]]`)
+	a, err = ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(a))
+	assert.Equal(t, "[]", string(a[0]))
+
+	d = []byte(`[[],[1]]`)
+	a, err = ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(a))
+	assert.Equal(t, "[]", string(a[0]))
+	assert.Equal(t, "[1]", string(a[1]))
+
+	d = []byte(`[{1:2}]`)
+	a, err = ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(a))
+	assert.Equal(t, "{1:2}", string(a[0]))
+
+	d = []byte(`[{1:2},{1:1}]`)
+	a, err = ParseArray(d)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(a))
+	assert.Equal(t, "{1:2}", string(a[0]))
+	assert.Equal(t, "{1:1}", string(a[1]))
 }

@@ -156,7 +156,7 @@ func TestMQClient(t *testing.T) {
 		assert.False(t, updated)
 
 		// change
-		remoteClient.command.Body = []byte(`{"OrderTopicConf":"new"}`)
+		remoteClient.command.Body = []byte(`{"orderTopicConf":"new"}`)
 		updated, _ = client.updateTopicRouterInfoFromNamesrv("t")
 		assert.True(t, updated)
 	})
