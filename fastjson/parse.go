@@ -23,6 +23,8 @@ func ParseArray(d []byte) ([][]byte, error) {
 			o, k, err = readString(d[i:])
 		case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 			o, k, err = readNumber(d[i:])
+		case 't', 'f':
+			o, k, err = readBool(d[i:])
 		case ',':
 			i++
 			continue
@@ -121,6 +123,8 @@ func readKV(d []byte) ([]byte, int, error) {
 			o, k, err = readString(d[i:])
 		case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 			o, k, err = readNumber(d[i:])
+		case 't', 'f':
+			o, k, err = readBool(d[i:])
 		case ':', '}', ',':
 			return o, i, nil
 		default:
@@ -207,6 +211,8 @@ func readArray(d []byte) ([]byte, int, error) {
 			_, k, err = readString(d[i:])
 		case n == '{':
 			_, k, err = readObject(d[i:])
+		case n == 't' || n == 'f':
+			_, k, err = readBool(d[i:])
 		default:
 			return nil, 0, errors.New(
 				"[BUG] cannot process ARRAY:\"" + string(d) + "\", unknow char:'" + string(n) + "'",
@@ -226,4 +232,37 @@ func firstNotSpace(d []byte) int {
 	for l := len(d); s < l && unicode.IsSpace(rune(d[s])); s++ {
 	}
 	return s
+}
+
+const (
+	tRue  = int64('t'<<24 | 'r'<<16 | 'u'<<8 | 'e')
+	fAlse = int64('f'<<32 | 'a'<<24 | 'l'<<16 | 's'<<8 | 'e')
+)
+
+func readBool(d []byte) ([]byte, int, error) {
+	b := d[0]
+
+	if b == 't' {
+		if len(d) < 4 {
+			return nil, 0, errors.New("[BUG] cannot parse TRUE:\"" + string(d) + "\"")
+		}
+
+		if int64(d[0])<<24|int64(d[1])<<16|int64(d[2])<<8|int64(d[3]) != tRue {
+			return nil, 0, errors.New("[BUG] cannot parse TRUE:\"" + string(d) + "\", bad true value")
+		}
+		return d[:4], 4, nil
+	}
+
+	if b == 'f' {
+		if len(d) < 5 {
+			return nil, 0, errors.New("[BUG] cannot parse FALSE:\"" + string(d) + "\"")
+		}
+
+		if int64(d[0])<<32|int64(d[1])<<24|int64(d[2])<<16|int64(d[3])<<8|int64(d[4]) != fAlse {
+			return nil, 0, errors.New("[BUG] cannot parse FALSE:\"" + string(d) + "\", bad false value")
+		}
+		return d[:5], 5, nil
+	}
+
+	return nil, 0, errors.New("[BUG] cannot parse BOOL:\"" + string(d) + "\"")
 }
