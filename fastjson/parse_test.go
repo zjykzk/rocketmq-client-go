@@ -297,6 +297,10 @@ func TestParseArray(t *testing.T) {
 	assert.Equal(t, 2, len(a))
 	assert.Equal(t, "true", string(a[0]))
 	assert.Equal(t, "false", string(a[1]))
+
+	d = []byte(`[trueA, false]`)
+	a, err = ParseArray(d)
+	assert.NotNil(t, err)
 }
 
 func TestReadBool(t *testing.T) {
