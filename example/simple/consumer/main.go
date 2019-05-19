@@ -25,8 +25,8 @@ func init() {
 	flag.StringVar(&tags, "a", "", "tags")
 }
 
-// push consumer: go run -n 10.20.200.198:9988 -m=false -t=topic_name
-// pull consumer: go run -n 10.20.200.198:9988 -m=true -t=topic_name
+// push consumer: go run -n 10.20.200.198:9988 -m=pull -t=topic_name
+// pull consumer: go run -n 10.20.200.198:9988 -m=push -t=topic_name
 func main() {
 	flag.Parse()
 

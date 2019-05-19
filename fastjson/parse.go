@@ -234,11 +234,6 @@ func firstNotSpace(d []byte) int {
 	return s
 }
 
-const (
-	tRue  = int64('t'<<24 | 'r'<<16 | 'u'<<8 | 'e')
-	fAlse = int64('f'<<32 | 'a'<<24 | 'l'<<16 | 's'<<8 | 'e')
-)
-
 func readBool(d []byte) ([]byte, int, error) {
 	b := d[0]
 
@@ -247,7 +242,7 @@ func readBool(d []byte) ([]byte, int, error) {
 			return nil, 0, errors.New("[BUG] cannot parse TRUE:\"" + string(d) + "\"")
 		}
 
-		if int64(d[0])<<24|int64(d[1])<<16|int64(d[2])<<8|int64(d[3]) != tRue {
+		if string(d[0:4]) != "true" {
 			return nil, 0, errors.New("[BUG] cannot parse TRUE:\"" + string(d) + "\", bad true value")
 		}
 		return d[:4], 4, nil
@@ -258,7 +253,7 @@ func readBool(d []byte) ([]byte, int, error) {
 			return nil, 0, errors.New("[BUG] cannot parse FALSE:\"" + string(d) + "\"")
 		}
 
-		if int64(d[0])<<32|int64(d[1])<<24|int64(d[2])<<16|int64(d[3])<<8|int64(d[4]) != fAlse {
+		if string(d[:5]) != "false" {
 			return nil, 0, errors.New("[BUG] cannot parse FALSE:\"" + string(d) + "\", bad false value")
 		}
 		return d[:5], 5, nil
