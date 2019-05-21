@@ -25,6 +25,8 @@ func ParseArray(d []byte) ([][]byte, error) {
 			o, k, err = readNumber(d[i:])
 		case 't', 'f':
 			o, k, err = readBool(d[i:])
+		case 'n':
+			o, k, err = readNull(d[i:])
 		case ',':
 			i++
 			continue
@@ -125,6 +127,8 @@ func readKV(d []byte) ([]byte, int, error) {
 			o, k, err = readNumber(d[i:])
 		case 't', 'f':
 			o, k, err = readBool(d[i:])
+		case 'n':
+			o, k, err = readNull(d[i:])
 		case ':', '}', ',':
 			return o, i, nil
 		default:
@@ -213,6 +217,8 @@ func readArray(d []byte) ([]byte, int, error) {
 			_, k, err = readObject(d[i:])
 		case n == 't' || n == 'f':
 			_, k, err = readBool(d[i:])
+		case n == 'n':
+			_, k, err = readNull(d[i:])
 		default:
 			return nil, 0, errors.New(
 				"[BUG] cannot process ARRAY:\"" + string(d) + "\", unknow char:'" + string(n) + "'",
@@ -238,26 +244,29 @@ func readBool(d []byte) ([]byte, int, error) {
 	b := d[0]
 
 	if b == 't' {
-		if len(d) < 4 {
-			return nil, 0, errors.New("[BUG] cannot parse TRUE:\"" + string(d) + "\"")
-		}
-
-		if string(d[0:4]) != "true" {
-			return nil, 0, errors.New("[BUG] cannot parse TRUE:\"" + string(d) + "\", bad true value")
-		}
-		return d[:4], 4, nil
+		return readValue(d, "true")
 	}
 
 	if b == 'f' {
-		if len(d) < 5 {
-			return nil, 0, errors.New("[BUG] cannot parse FALSE:\"" + string(d) + "\"")
-		}
-
-		if string(d[:5]) != "false" {
-			return nil, 0, errors.New("[BUG] cannot parse FALSE:\"" + string(d) + "\", bad false value")
-		}
-		return d[:5], 5, nil
+		return readValue(d, "false")
 	}
 
 	return nil, 0, errors.New("[BUG] cannot parse BOOL:\"" + string(d) + "\"")
+}
+
+func readNull(d []byte) ([]byte, int, error) {
+	return readValue(d, "null")
+}
+
+func readValue(d []byte, v string) ([]byte, int, error) {
+	l := len(v)
+	if len(d) < l {
+		return nil, 0, errors.New("[BUG] cannot parse " + v + ":\"" + string(d) + "\"")
+	}
+
+	if string(d[:l]) != v {
+		return nil, 0, errors.New("[BUG] cannot parse " + v + ":\"" + string(d) + "\", bad value")
+	}
+
+	return d[:l], l, nil
 }

@@ -228,6 +228,11 @@ func TestParseObject(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []byte(`{"2":1}`), m["true"])
 
+	d = []byte(`{"null":null}`)
+	m, err = ParseObject(d)
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("null"), m["null"])
+
 	d = []byte(`{trueA:{"2":1}}`)
 	m, err = ParseObject(d)
 	assert.NotNil(t, err)
@@ -301,6 +306,16 @@ func TestParseArray(t *testing.T) {
 	d = []byte(`[trueA, false]`)
 	a, err = ParseArray(d)
 	assert.NotNil(t, err)
+
+	d = []byte(`[null,null]`)
+	a, err = ParseArray(d)
+	assert.Equal(t, "null", string(a[0]))
+	assert.Equal(t, "null", string(a[1]))
+	assert.Nil(t, err)
+
+	d = []byte(`[n,null]`)
+	a, err = ParseArray(d)
+	assert.NotNil(t, err)
 }
 
 func TestReadBool(t *testing.T) {
@@ -328,4 +343,13 @@ func TestReadBool(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "false", string(b))
 	assert.Equal(t, 5, i)
+}
+
+func TestReadNull(t *testing.T) {
+	_, _, err := readNull([]byte("a"))
+	assert.NotNil(t, err)
+	d, i, err := readNull([]byte("null"))
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("null"), d)
+	assert.Equal(t, 4, i)
 }
