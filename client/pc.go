@@ -84,7 +84,7 @@ type Consumer interface {
 	ReblanceQueue()
 	RunningInfo() RunningInfo
 	ResetOffset(topic string, offsets map[message.Queue]int64) error
-	ConsumeMessageDirectly(msg *message.Ext, group, broker string) (ConsumeMessageDirectlyResult, error)
+	ConsumeMessageDirectly(msg *message.Ext, broker string) (ConsumeMessageDirectlyResult, error)
 }
 
 type consumerColl struct {

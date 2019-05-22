@@ -642,3 +642,26 @@ func TestProcessOrderlyConsumeResult(t *testing.T) {
 	assert.Equal(t, int64(2), cs.offseter.(*fakeOffsetStorer).offset)
 	assert.True(t, cs.offseter.(*fakeOffsetStorer).runUpdate)
 }
+
+func TestOrderlyConsumeDirectly(t *testing.T) {
+	cs := newTestConsumeOrderlyService(t)
+	fakeConsumer := cs.consumer.(*fakeOrderlyConsumer)
+
+	msg, broker := &message.Ext{}, "TestOrderlyConsumeDirectly"
+
+	fakeConsumer.status = SuspendCurrentQueueMoment
+	ret := cs.consumeMessageDirectly(msg, broker)
+
+	assert.Equal(t, int(ReconsumeLater), int(ret.Result))
+	assert.True(t, ret.TimeCost > 0)
+	assert.True(t, ret.Order)
+	assert.True(t, ret.AutoCommit)
+
+	fakeConsumer.status = OrderlySuccess
+	ret = cs.consumeMessageDirectly(msg, broker)
+
+	assert.Equal(t, int(ConcurrentlySuccess), int(ret.Result))
+	assert.True(t, ret.TimeCost > 0)
+	assert.True(t, ret.Order)
+	assert.True(t, ret.AutoCommit)
+}

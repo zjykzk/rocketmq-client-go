@@ -7,6 +7,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
@@ -521,6 +522,36 @@ func (cs *consumeOrderlyService) dropAndClear(mq *message.Queue) error {
 	q.drop()
 
 	return nil
+}
+
+func (cs *consumeOrderlyService) consumeMessageDirectly(
+	msg *message.Ext, broker string,
+) client.ConsumeMessageDirectlyResult {
+	ret := client.ConsumeMessageDirectlyResult{AutoCommit: true, Order: true}
+
+	msgs := []*message.Ext{msg}
+	cs.resetRetryTopic(msgs)
+
+	ctx := &OrderlyContext{
+		Queue: &message.Queue{BrokerName: broker, Topic: msg.Topic, QueueID: msg.QueueID},
+	}
+
+	cs.logger.Infof("consume message DIRECTLY message:%s", msg)
+
+	start := time.Now()
+
+	status := cs.consumer.Consume(msgs, ctx)
+	if status == OrderlySuccess {
+		ret.Result = client.Success
+	} else if status == SuspendCurrentQueueMoment {
+		ret.Result = client.Later
+	}
+
+	ret.TimeCost = time.Since(start)
+
+	cs.logger.Infof("consume message DIRECTLY message result:%v", ret)
+
+	return ret
 }
 
 func newOrderProcessQueue() *orderProcessQueue {

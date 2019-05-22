@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/zjykzk/rocketmq-client-go/client"
 	"github.com/zjykzk/rocketmq-client-go/message"
 )
 
@@ -15,6 +16,17 @@ const (
 	ConcurrentlySuccess ConsumeConcurrentlyStatus = iota
 	ReconsumeLater
 )
+
+func (s ConsumeConcurrentlyStatus) String() string {
+	switch s {
+	case ConcurrentlySuccess:
+		return "ConcurrentlySuccess"
+	case ReconsumeLater:
+		return "ReconsumeLater"
+	default:
+		return "UNKNOW ConsumeConcurrentlyStatus"
+	}
+}
 
 // ConcurrentlyContext consume concurrently context
 type ConcurrentlyContext struct {
@@ -353,6 +365,36 @@ func (cs *consumeConcurrentlyService) dropAndClear(mq *message.Queue) error {
 	q.clear()
 
 	return nil
+}
+
+func (cs *consumeConcurrentlyService) consumeMessageDirectly(
+	msg *message.Ext, broker string,
+) client.ConsumeMessageDirectlyResult {
+	ret := client.ConsumeMessageDirectlyResult{AutoCommit: true, Order: false}
+
+	msgs := []*message.Ext{msg}
+	cs.resetRetryTopic(msgs)
+
+	ctx := &ConcurrentlyContext{
+		MessageQueue: &message.Queue{BrokerName: broker, Topic: msg.Topic, QueueID: msg.QueueID},
+	}
+
+	cs.logger.Infof("consume message DIRECTLY message:%s", msg)
+
+	start := time.Now()
+
+	status := cs.consumer.Consume(msgs, ctx)
+	if status == ConcurrentlySuccess {
+		ret.Result = client.Success
+	} else if status == ReconsumeLater {
+		ret.Result = client.Later
+	}
+
+	ret.TimeCost = time.Since(start)
+
+	cs.logger.Infof("consume message DIRECTLY message result:%v", ret)
+
+	return ret
 }
 
 type concurrentProcessQueue struct {

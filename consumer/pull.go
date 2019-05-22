@@ -246,7 +246,7 @@ func (c *PullConsumer) ResetOffset(topic string, offsets map[message.Queue]int64
 
 // ConsumeMessageDirectly NOOPS
 func (c *PullConsumer) ConsumeMessageDirectly(
-	msg *message.Ext, group, broker string,
+	msg *message.Ext, broker string,
 ) (
 	r client.ConsumeMessageDirectlyResult, err error,
 ) {

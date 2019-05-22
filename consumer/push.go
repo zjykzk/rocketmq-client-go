@@ -778,10 +778,10 @@ func (c *PushConsumer) ResetOffset(topic string, offsets map[message.Queue]int64
 
 // ConsumeMessageDirectly consume the specified message notified by the broker
 func (c *PushConsumer) ConsumeMessageDirectly(
-	msg *message.Ext, group, broker string,
+	msg *message.Ext, broker string,
 ) (
 	r client.ConsumeMessageDirectlyResult, err error,
 ) {
-	// TODO
+	r = c.consumeService.consumeMessageDirectly(msg, broker)
 	return
 }

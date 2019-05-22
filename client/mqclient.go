@@ -719,7 +719,7 @@ func (c *MQClient) consumeMessageDirectly(ctx *remote.ChannelContext, cmd *remot
 	}
 
 	broker := cmd.ExtFields["brokerName"]
-	result, err := co.ConsumeMessageDirectly(ms[0], group, broker)
+	result, err := co.ConsumeMessageDirectly(ms[0], broker)
 	if err != nil {
 		resp = remote.NewCommand(rpc.SystemError, nil)
 		resp.Remark = fmt.Sprintf("consume %s failed by consumer of group '%s'", ms[0], group)

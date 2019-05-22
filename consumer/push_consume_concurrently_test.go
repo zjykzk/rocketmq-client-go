@@ -426,3 +426,28 @@ func TestPutNewMessageQueue(t *testing.T) {
 	assert.False(t, ok)
 	assert.Nil(t, pq)
 }
+
+func TestConcurrentConsumeDirectly(t *testing.T) {
+	cs := newTestConcurrentlyService(t)
+	fakeConsumer := cs.consumer.(*fakeConcurrentlyConsumer)
+
+	msg, broker := &message.Ext{}, "TestConsumeDirectoryConcurrent"
+
+	fakeConsumer.ret = ReconsumeLater
+	fakeConsumer.wg.Add(1)
+	ret := cs.consumeMessageDirectly(msg, broker)
+
+	assert.Equal(t, int(ReconsumeLater), int(ret.Result))
+	assert.True(t, ret.TimeCost > 0)
+	assert.False(t, ret.Order)
+	assert.True(t, ret.AutoCommit)
+
+	fakeConsumer.ret = ConcurrentlySuccess
+	fakeConsumer.wg.Add(1)
+	ret = cs.consumeMessageDirectly(msg, broker)
+
+	assert.Equal(t, int(ConcurrentlySuccess), int(ret.Result))
+	assert.True(t, ret.TimeCost > 0)
+	assert.False(t, ret.Order)
+	assert.True(t, ret.AutoCommit)
+}

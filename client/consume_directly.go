@@ -15,11 +15,20 @@ const (
 	ReturnNil
 )
 
+var consumeDirectlyResultStrings = []string{"Success", "Later", "Rollback", "Commit", "Error"}
+
+func (r ConsumeDirectlyResult) String() string {
+	if int(r) >= len(consumeDirectlyResultStrings) || r < 0 {
+		return "UNKNOW ConsumeDirectlyResult"
+	}
+	return consumeDirectlyResultStrings[r]
+}
+
 // ConsumeMessageDirectlyResult consume the message directly, sending by the broker
 type ConsumeMessageDirectlyResult struct {
 	Order      bool
 	AutoCommit bool
-	remark     string
-	timeCost   time.Duration
+	Remark     string
+	TimeCost   time.Duration
 	Result     ConsumeDirectlyResult
 }

@@ -1,6 +1,9 @@
 package consumer
 
-import "github.com/zjykzk/rocketmq-client-go/message"
+import (
+	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/message"
+)
 
 type fakeConsumerService struct {
 	queues    []message.Queue
@@ -20,6 +23,8 @@ type fakeConsumerService struct {
 
 	runDropAndClear bool
 	dropAndClearErr error
+
+	consumeMessageDirectlyResult client.ConsumeMessageDirectlyResult
 }
 
 func (m *fakeConsumerService) messageQueuesOfTopic(topic string) []message.Queue {
@@ -64,4 +69,8 @@ func (m *fakeConsumerService) dropAndClear(mq *message.Queue) error {
 
 func (m *fakeConsumerService) removeProcessQueue(mq *message.Queue) {
 	m.runRemoveProcessQueue = true
+}
+
+func (m *fakeConsumerService) consumeMessageDirectly(msg *message.Ext, broker string) client.ConsumeMessageDirectlyResult {
+	return m.consumeMessageDirectlyResult
 }

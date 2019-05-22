@@ -1,6 +1,9 @@
 package consumer
 
-import "github.com/zjykzk/rocketmq-client-go/message"
+import (
+	"github.com/zjykzk/rocketmq-client-go/client"
+	"github.com/zjykzk/rocketmq-client-go/message"
+)
 
 type consumeService interface {
 	messageQueuesOfTopic(topic string) []message.Queue
@@ -11,4 +14,5 @@ type consumeService interface {
 	submitConsumeRequest([]*message.Ext, *processQueue, *message.Queue)
 	dropAndClear(mq *message.Queue) error
 	removeProcessQueue(mq *message.Queue)
+	consumeMessageDirectly(msg *message.Ext, broker string) client.ConsumeMessageDirectlyResult
 }
