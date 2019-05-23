@@ -92,7 +92,7 @@ func (mc *fakeConsumer) ResetOffset(topic string, offsets map[message.Queue]int6
 	return mc.resetOffsetErr
 }
 func (mc *fakeConsumer) ConsumeMessageDirectly(
-	msg *message.Ext, group, broker string,
+	msg *message.Ext, broker string,
 ) (
 	r ConsumeMessageDirectlyResult, err error,
 ) {

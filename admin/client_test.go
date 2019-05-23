@@ -61,3 +61,6 @@ func (c *fakeMQClient) GetConsumerIDs(addr, group string, timeout time.Duration)
 func (c *fakeMQClient) ResetConsumeOffset(addr, topic, group string, timestamp time.Time, isForce bool, timeout time.Duration) (map[message.Queue]int64, error) {
 	return nil, nil
 }
+func (c *fakeMQClient) ConsumeMessageDirectly(addr, group, clientID, offsetID string) (ret client.ConsumeMessageDirectlyResult, err error) {
+	return
+}

@@ -473,7 +473,7 @@ func LockMessageQueues(
 
 // UnlockMessageQueuesOneway send unlock message queue request to the broker
 func UnlockMessageQueuesOneway(
-	client remote.Client, addr string, group, clientID string, queues []message.Queue,
+	client remote.Client, addr, group, clientID string, queues []message.Queue,
 ) error {
 	d, _ := json.Marshal(&lockRequest{Group: group, ClientID: clientID, Queues: queues})
 	err := client.RequestOneway(addr, remote.NewCommandWithBody(unlockBatchMQ, nil, d))
@@ -482,4 +482,45 @@ func UnlockMessageQueuesOneway(
 	}
 
 	return nil
+}
+
+type consumeMessageDirectlyHeader struct {
+	group    string
+	clientID string
+	offsetID string
+}
+
+func (h *consumeMessageDirectlyHeader) ToMap() map[string]string {
+	return map[string]string{
+		"consumerGroup": h.group,
+		"clientId":      h.clientID,
+		"msgId":         h.offsetID,
+	}
+}
+
+// ConsumeMessageDirectly send unlock message queue request to the broker
+func ConsumeMessageDirectly(
+	client remote.Client, addr, group, clientID, offsetID string, timeout time.Duration,
+) (
+	ret ConsumeMessageDirectlyResult, err error,
+) {
+	cmd, err := client.RequestSync(addr, remote.NewCommand(
+		ConsumeMessageDirectlyCode, &consumeMessageDirectlyHeader{
+			group:    group,
+			clientID: clientID,
+			offsetID: offsetID,
+		}), timeout,
+	)
+	if err != nil {
+		err = requestError(err)
+		return
+	}
+
+	if cmd.Code != Success {
+		err = brokerError(cmd)
+		return
+	}
+
+	err = json.Unmarshal(cmd.Body, &ret)
+	return
 }

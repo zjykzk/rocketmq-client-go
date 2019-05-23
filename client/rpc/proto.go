@@ -74,7 +74,7 @@ const (
 	cleanExpiredConsumequeue                     = 306
 	GetConsumerRunningInfo                       = 307
 	queryCorrectionOffset                        = 308
-	ConsumeMessageDirectly                       = 309
+	ConsumeMessageDirectlyCode                   = 309
 	sendMessageV2                                = 310
 	getUnitTopicList                             = 311
 	getHasUnitSubTopicList                       = 312

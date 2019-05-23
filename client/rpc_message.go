@@ -132,3 +132,9 @@ func (c *MQClient) UnlockMessageQueuesOneway(group, broker string, queues []mess
 	}
 	return rpc.UnlockMessageQueuesOneway(c.Client, r.Addr, group, c.clientID, queues)
 }
+
+// ConsumeMessageDirectly send the request to broker to push the message specified by the offsetID
+// to the specified client in the group
+func (c *MQClient) ConsumeMessageDirectly(addr, group, clientID, offsetID string) (ConsumeMessageDirectlyResult, error) {
+	return rpc.ConsumeMessageDirectly(c.Client, addr, group, clientID, offsetID, 2*time.Second)
+}

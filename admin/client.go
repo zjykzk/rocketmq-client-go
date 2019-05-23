@@ -25,4 +25,5 @@ type mqClient interface {
 	UpdateTopicRouterInfoFromNamesrv(topic string) error
 	FindBrokerAddr(brokerName string, hintBrokerID int32, lock bool) (*client.FindBrokerResult, error)
 	ResetConsumeOffset(addr, topic, group string, timestamp time.Time, isForce bool, timeout time.Duration) (map[message.Queue]int64, error)
+	ConsumeMessageDirectly(addr, group, clientID, offsetID string) (client.ConsumeMessageDirectlyResult, error)
 }

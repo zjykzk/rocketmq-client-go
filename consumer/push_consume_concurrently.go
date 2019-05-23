@@ -392,7 +392,7 @@ func (cs *consumeConcurrentlyService) consumeMessageDirectly(
 
 	ret.TimeCost = time.Since(start)
 
-	cs.logger.Infof("consume message DIRECTLY message result:%v", ret)
+	cs.logger.Infof("consume message DIRECTLY message result:%#v", ret)
 
 	return ret
 }

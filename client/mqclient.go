@@ -583,7 +583,7 @@ func (c *MQClient) initProcessor() {
 		rpc.ResetConsumerClientOffset:   c.resetOffset,
 		rpc.GetConsumerStatusFromClient: c.getConsumerStatusFromClient,
 		rpc.GetConsumerRunningInfo:      c.getConsumerRunningInfo,
-		rpc.ConsumeMessageDirectly:      c.consumeMessageDirectly,
+		rpc.ConsumeMessageDirectlyCode:  c.consumeMessageDirectly,
 	}
 }
 

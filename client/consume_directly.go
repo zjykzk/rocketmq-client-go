@@ -1,9 +1,11 @@
 package client
 
-import "time"
+import (
+	"github.com/zjykzk/rocketmq-client-go/client/rpc"
+)
 
 // ConsumeDirectlyResult the flag of the consuming directly
-type ConsumeDirectlyResult int
+type ConsumeDirectlyResult = rpc.ConsumeDirectlyResult
 
 // predefined `ConsumeDirectlyResult` values
 const (
@@ -17,18 +19,5 @@ const (
 
 var consumeDirectlyResultStrings = []string{"Success", "Later", "Rollback", "Commit", "Error"}
 
-func (r ConsumeDirectlyResult) String() string {
-	if int(r) >= len(consumeDirectlyResultStrings) || r < 0 {
-		return "UNKNOW ConsumeDirectlyResult"
-	}
-	return consumeDirectlyResultStrings[r]
-}
-
 // ConsumeMessageDirectlyResult consume the message directly, sending by the broker
-type ConsumeMessageDirectlyResult struct {
-	Order      bool
-	AutoCommit bool
-	Remark     string
-	TimeCost   time.Duration
-	Result     ConsumeDirectlyResult
-}
+type ConsumeMessageDirectlyResult = rpc.ConsumeMessageDirectlyResult
