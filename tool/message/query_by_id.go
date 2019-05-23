@@ -13,7 +13,7 @@ import (
 func init() {
 	cmd := &queryByID{}
 	flags := flag.NewFlagSet(cmd.Name(), flag.ContinueOnError)
-	flags.StringVar(&cmd.messageID, "i", "", "message id")
+	flags.StringVar(&cmd.offsetID, "i", "", "message id")
 	flags.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", cmd.Name())
 		flags.PrintDefaults()
@@ -24,19 +24,23 @@ func init() {
 }
 
 type queryByID struct {
-	messageID string
-	flags     *flag.FlagSet
+	offsetID string
+	flags    *flag.FlagSet
 }
 
 func (q *queryByID) Name() string {
 	return "queryByID"
 }
 
+func (q *queryByID) Desc() string {
+	return "query the message by the offset id"
+}
+
 func (q *queryByID) Run(args []string) {
 	q.flags.Parse(args)
 
-	if len(q.messageID) == 0 {
-		fmt.Println("empty message id: [" + q.messageID + "]")
+	if len(q.offsetID) == 0 {
+		fmt.Println("empty message id: [" + q.offsetID + "]")
 		return
 	}
 
@@ -44,7 +48,7 @@ func (q *queryByID) Run(args []string) {
 	a := admin.NewAdmin([]string{"X"}, logger)
 	a.Start()
 
-	msg, err := a.QueryMessageByID(q.messageID)
+	msg, err := a.QueryMessageByID(q.offsetID)
 	if err != nil {
 		fmt.Printf("Error:%v\n", err)
 		return

@@ -37,6 +37,10 @@ func (mo *maxOffset) Name() string {
 	return "maxoffset"
 }
 
+func (mo *maxOffset) Desc() string {
+	return "query the max offset"
+}
+
 func (mo *maxOffset) Run(args []string) {
 	mo.flags.Parse(args)
 

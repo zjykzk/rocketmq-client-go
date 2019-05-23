@@ -64,6 +64,10 @@ func (c *offsetUpdater) Name() string {
 	return "updateOffset"
 }
 
+func (c *offsetUpdater) Desc() string {
+	return "update the client's offset"
+}
+
 func (c *offsetUpdater) Run(args []string) {
 	c.flags.Parse(args)
 	if len(c.namesrvAddrs) == 0 {
@@ -119,6 +123,10 @@ func (c *offsetQuerier) Name() string {
 	return "queryOffset"
 }
 
+func (c *offsetQuerier) Desc() string {
+	return "query specified consume queue's offset"
+}
+
 func (c *offsetQuerier) Run(args []string) {
 	c.flags.Parse(args)
 	if len(c.namesrvAddrs) == 0 {
@@ -170,6 +178,10 @@ type offsetReseter struct {
 
 func (c *offsetReseter) Name() string {
 	return "resetOffset"
+}
+
+func (c *offsetReseter) Desc() string {
+	return "reset client's consume-offset"
 }
 
 func (c *offsetReseter) Run(args []string) {

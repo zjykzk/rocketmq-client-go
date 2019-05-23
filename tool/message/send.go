@@ -37,6 +37,10 @@ func (s *sendMsg) Name() string {
 	return "sendMsg"
 }
 
+func (s *sendMsg) Desc() string {
+	return "send the message"
+}
+
 func (s *sendMsg) Run(args []string) {
 	s.flags.Parse(args)
 

@@ -1,11 +1,13 @@
 package command
 
 import (
+	"fmt"
 	"log"
 )
 
 type command interface {
 	Name() string
+	Desc() string
 	Run(args []string)
 	Usage()
 }
@@ -26,9 +28,26 @@ func RegisterCommand(cmd command) {
 }
 
 func printUsage() {
+	println(
+		`mqadmin is a tool for manage RocketMQ.
+
+Usage:
+
+        mqadmin <command> [arguments]
+
+The commands are:
+`)
 	for _, v := range commands {
-		v.Usage()
+		if v.Name() == "help" {
+			continue
+		}
+
+		fmt.Printf("\t%-20s%s\n", v.Name(), v.Desc())
 	}
+
+	println(`
+Use "mqadmin help <command> for more information about a command."
+`)
 }
 
 // Run run the command
@@ -37,8 +56,8 @@ func Run(args []string) {
 		printUsage()
 		return
 	}
-	cmdName := args[0]
-	cmd := commands[cmdName]
+
+	cmd := commands[args[0]]
 	if cmd == nil {
 		printUsage()
 		return

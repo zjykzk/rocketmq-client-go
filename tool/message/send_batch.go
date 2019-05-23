@@ -37,6 +37,10 @@ func (s *sendBatch) Name() string {
 	return "sendBatch"
 }
 
+func (s *sendBatch) Desc() string {
+	return "send the message batchly"
+}
+
 func (s *sendBatch) Run(args []string) {
 	s.flags.Parse(args)
 

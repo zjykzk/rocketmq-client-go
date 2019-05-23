@@ -33,6 +33,10 @@ func (c *consumeDirectly) Name() string {
 	return "consumeDirectly"
 }
 
+func (c *consumeDirectly) Desc() string {
+	return "consume the message by specified client directly"
+}
+
 func (c *consumeDirectly) Run(args []string) {
 	c.flags.Parse(args)
 

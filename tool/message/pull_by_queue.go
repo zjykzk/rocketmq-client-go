@@ -43,6 +43,10 @@ func (p *pullByQueue) Name() string {
 	return "pullByQueue"
 }
 
+func (p *pullByQueue) Desc() string {
+	return "pull the message from the specified queue"
+}
+
 func (p *pullByQueue) Run(args []string) {
 	p.flags.Parse(args)
 

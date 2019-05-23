@@ -36,6 +36,10 @@ func (c *clientIDsOfGroupFetcher) Name() string {
 	return "clientidsOfGroup"
 }
 
+func (c *clientIDsOfGroupFetcher) Desc() string {
+	return "query client ids"
+}
+
 func (c *clientIDsOfGroupFetcher) Run(args []string) {
 	c.flags.Parse(args)
 	if c.brokerAddr == "" {
