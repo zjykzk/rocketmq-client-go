@@ -236,6 +236,11 @@ func TestParseObject(t *testing.T) {
 	d = []byte(`{trueA:{"2":1}}`)
 	m, err = ParseObject(d)
 	assert.NotNil(t, err)
+
+	d = []byte("null")
+	m, err = ParseObject(d)
+	assert.Nil(t, err)
+	assert.Nil(t, m)
 }
 
 func TestParseArray(t *testing.T) {

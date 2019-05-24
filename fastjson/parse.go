@@ -75,6 +75,12 @@ func ParseObject(d []byte) (map[string][]byte, error) {
 			} else {
 				k = string(s)
 			}
+		case 'n':
+			_, _, err := readNull(d[i:])
+			if err != nil {
+				return nil, err
+			}
+			return nil, nil
 		case '}':
 			return m, nil
 		default:
