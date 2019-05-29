@@ -121,12 +121,11 @@ func (a *Admin) CreateOrUpdateTopic(addr, topic string, perm, queueCount int32) 
 	var (
 		err error
 	)
-	for i := 0; i < 5; i++ {
-		if err = a.client.CreateOrUpdateTopic(addr, header, 3*time.Second); err == nil {
+	for _, v := range a.NameServerAddrs {
+		if err = a.client.CreateOrUpdateTopic(v, header, 3*time.Second); err == nil {
 			return nil
 		}
 	}
-
 	return err
 }
 
