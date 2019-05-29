@@ -25,13 +25,13 @@ type Admin struct {
 }
 
 // NewAdmin create admin operator
-func NewAdmin(namesrvAddrs []string, logger log.Logger) *Admin {
+func NewAdmin(namesAdders []string, logger log.Logger) *Admin {
 	a := &Admin{
 		Client: rocketmq.Client{
 			HeartbeatBrokerInterval:       30 * time.Second,
 			PollNameServerInterval:        30 * time.Second,
 			PersistConsumerOffsetInterval: 5 * time.Second,
-			NameServerAddrs:               namesrvAddrs,
+			NameServerAddrs:               namesAdders,
 			GroupName:                     "admin_ext_group",
 		},
 	}
@@ -72,15 +72,15 @@ func (a *Admin) start() (err error) {
 
 func (a *Admin) buildMQClient() (*client.MQClient, error) {
 	a.ClientID = client.BuildMQClientID(a.ClientIP, a.UnitName, a.InstanceName)
-	client, err := client.New(
+	c, err := client.New(
 		&client.Config{
 			HeartbeatBrokerInterval: a.HeartbeatBrokerInterval,
 			PollNameServerInterval:  a.PollNameServerInterval,
 			NameServerAddrs:         a.NameServerAddrs,
 		}, a.ClientID, a.logger,
 	)
-	a.client = client
-	return client, err
+	a.client = c
+	return c, err
 }
 
 func (a *Admin) buildShutdowner(f func()) {
@@ -108,7 +108,7 @@ func (a *Admin) Group() string {
 }
 
 // CreateOrUpdateTopic create a new topic
-func (a *Admin) CreateOrUpdateTopic(addr, topic string, perm, queueCount int32) error {
+func (a *Admin) CreateOrUpdateTopic(topic string, perm, queueCount int32) error {
 	header := &rpc.CreateOrUpdateTopicHeader{
 		Topic:           topic,
 		ReadQueueNums:   queueCount,
@@ -117,16 +117,12 @@ func (a *Admin) CreateOrUpdateTopic(addr, topic string, perm, queueCount int32) 
 		Perm:            perm,
 		TopicFilterType: SingleTag.String(),
 	}
-
-	var (
-		err error
-	)
-	for _, v := range a.NameServerAddrs {
-		if err = a.client.CreateOrUpdateTopic(v, header, 3*time.Second); err == nil {
-			return nil
+	for _, address := range a.NameServerAddrs {
+		if err := a.client.CreateOrUpdateTopic(address, header, 3*time.Second); err != nil {
+			return err
 		}
 	}
-	return err
+	return nil
 }
 
 // DeleteTopicInBroker delete the topic in the broker
