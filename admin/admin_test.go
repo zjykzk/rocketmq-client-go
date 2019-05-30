@@ -52,12 +52,9 @@ func testMaxoffset(a *Admin, t *testing.T) {
 }
 
 func createTopicOrUpdate(a *Admin, t *testing.T) {
-	a.client = &fakeMQClient{createTopicErrorCount: 0}
-	assert.Nil(t, a.CreateOrUpdateTopic("", "", 0, 1))
-
-	a.client = &fakeMQClient{createTopicErrorCount: 3}
-	assert.Nil(t, a.CreateOrUpdateTopic("", "", 0, 1))
-
-	a.client = &fakeMQClient{createTopicErrorCount: 6}
-	assert.NotNil(t, a.CreateOrUpdateTopic("", "", 0, 1))
+	a.client = &fakeMQClient{
+		fakeBrokerAddrs: make(map[string]string),
+	}
+	err := a.CreateOrUpdateTopic("Topic", 6, 16)
+	assert.Nil(t, err)
 }
