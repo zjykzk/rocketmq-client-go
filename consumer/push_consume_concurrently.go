@@ -397,6 +397,12 @@ func (cs *consumeConcurrentlyService) consumeMessageDirectly(
 	return ret
 }
 
+func (cs *consumeConcurrentlyService) properties() map[string]string {
+	return map[string]string{
+		"PROP_CONSUMEORDERLY": "false",
+	}
+}
+
 type concurrentProcessQueue struct {
 	processQueue
 }

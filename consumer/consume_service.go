@@ -15,4 +15,5 @@ type consumeService interface {
 	dropAndClear(mq *message.Queue) error
 	removeProcessQueue(mq *message.Queue)
 	consumeMessageDirectly(msg *message.Ext, broker string) client.ConsumeMessageDirectlyResult
+	properties() map[string]string
 }

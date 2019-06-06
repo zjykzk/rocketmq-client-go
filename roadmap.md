@@ -9,7 +9,7 @@
 - [x] producer body size limit
 - [x] consumer long polling
 - [x] consume orderly
-- [ ] process the message consume directly from the broker
+- [x] process the message consume directly from the broker
 - [ ] consumer stats manager
 - [ ] vip request
 - [ ] transaction

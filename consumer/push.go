@@ -3,6 +3,7 @@ package consumer
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -784,4 +785,40 @@ func (c *PushConsumer) ConsumeMessageDirectly(
 ) {
 	r = c.consumeService.consumeMessageDirectly(msg, broker)
 	return
+}
+
+// RunningInfo returns the consumter's running information
+func (c *PushConsumer) RunningInfo() client.RunningInfo {
+	prop := map[string]string{
+		"consumerGroup":                 c.GroupName,
+		"lastestConsumeTimestamp":       c.lastestConsumeTimestamp.Format("2006-01-02 15:04:05"),
+		"consumeTimeout":                c.consumeTimeout.String(),
+		"thresholdSizeOfQueue":          strconv.Itoa(c.thresholdSizeOfQueue),
+		"thresholdCountOfQueue":         strconv.Itoa(c.thresholdCountOfQueue),
+		"thresholdSizeOfTopic":          strconv.Itoa(c.thresholdSizeOfTopic),
+		"thresholdCountOfTopic":         strconv.Itoa(c.thresholdCountOfTopic),
+		"pullInterval":                  c.pullInterval.String(),
+		"pullBatchSize":                 strconv.Itoa(c.pullBatchSize),
+		"consumeBatchSize":              strconv.Itoa(c.consumeBatchSize),
+		"postSubscriptionWhenPull":      strconv.FormatBool(c.postSubscriptionWhenPull),
+		"consumeMessageBatchMaxSize":    strconv.Itoa(c.consumeMessageBatchMaxSize),
+		"pause":                         strconv.FormatBool(c.isPause()),
+		"queueControlFlowTotal":         strconv.FormatInt(int64(c.queueControlFlowTotal), 10),
+		"messageModel":                  c.MessageModel.String(),
+		"registerTopics":                strings.Join(c.subscribeData.Topics(), ", "),
+		"unitMode":                      strconv.FormatBool(c.IsUnitMode),
+		"maxReconsumeTimes":             strconv.FormatInt(int64(c.MaxReconsumeTimes), 10),
+		"PROP_CONSUMER_START_TIMESTAMP": c.startTime.Format("2006-01-02 15:04:05"),
+		"PROP_NAMESERVER_ADDR":          strings.Join(c.NameServerAddrs, ";"),
+		"PROP_CONSUME_TYPE":             c.Type(),
+		"PROP_CLIENT_VERSION":           rocketmq.CurrentVersion.String(),
+	}
+	for k, v := range c.consumeService.properties() {
+		prop[k] = v
+	}
+
+	return client.RunningInfo{
+		Properties:    prop,
+		Subscriptions: c.Subscriptions(),
+	}
 }

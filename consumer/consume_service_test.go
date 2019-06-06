@@ -74,3 +74,7 @@ func (m *fakeConsumerService) removeProcessQueue(mq *message.Queue) {
 func (m *fakeConsumerService) consumeMessageDirectly(msg *message.Ext, broker string) client.ConsumeMessageDirectlyResult {
 	return m.consumeMessageDirectlyResult
 }
+
+func (m *fakeConsumerService) properties() map[string]string {
+	return nil
+}

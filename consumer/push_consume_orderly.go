@@ -554,6 +554,12 @@ func (cs *consumeOrderlyService) consumeMessageDirectly(
 	return ret
 }
 
+func (cs *consumeOrderlyService) properties() map[string]string {
+	return map[string]string{
+		"PROP_CONSUMEORDERLY": "true",
+	}
+}
+
 func newOrderProcessQueue() *orderProcessQueue {
 	return &orderProcessQueue{
 		timeoutLocker:     newTimeoutLocker(),
