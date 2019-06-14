@@ -68,11 +68,11 @@ func UnregisterClient(
 	}
 	cmd, err := client.RequestSync(addr, remote.NewCommand(unregisterClient, h), to)
 	if err != nil {
-		return remote.RequestError(err)
+		return requestError(err)
 	}
 
 	if cmd.Code != Success {
-		err = remote.BrokerError(cmd)
+		err = brokerError(cmd)
 	}
 	return
 }

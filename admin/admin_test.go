@@ -55,6 +55,6 @@ func createTopicOrUpdate(a *Admin, t *testing.T) {
 	a.client = &fakeMQClient{
 		fakeBrokerAddrs: make(map[string]string),
 	}
-	err := a.CreateOrUpdateTopic("Topic", 6, 16)
+	err := a.CreateOrUpdateTopic("addr", "Topic", 6, 16)
 	assert.Nil(t, err)
 }
