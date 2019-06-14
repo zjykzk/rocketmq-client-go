@@ -211,7 +211,7 @@ func (c *offsetReseter) Run(args []string) {
 		return
 	}
 	logger := log.Std
-	a := admin.NewAdmin(strings.Split(c.namesrvAddrs, ","), logger)
+	a := admin.New(strings.Split(c.namesrvAddrs, ","), logger, "tool-offset")
 	a.Start()
 
 	t, err := time.Parse("2006-01-02 15:04:05", c.timestamp)

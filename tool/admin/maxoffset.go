@@ -69,7 +69,7 @@ func (mo *maxOffset) Run(args []string) {
 	}
 
 	logger := log.Std
-	a := admin.NewAdmin(strings.Split(mo.namesrvAddrs, ","), logger)
+	a := admin.New(strings.Split(mo.namesrvAddrs, ","), logger, "tool-max-offset")
 	a.Start()
 
 	offset, err := a.MaxOffset(&message.Queue{
