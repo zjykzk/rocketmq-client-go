@@ -25,7 +25,7 @@ type Admin struct {
 }
 
 // New create admin operator
-func New(namesAdders []string, logger log.Logger, group string) *Admin {
+func New(group string, namesAdders []string, logger log.Logger) *Admin {
 	a := &Admin{
 		Client: rocketmq.Client{
 			HeartbeatBrokerInterval:       30 * time.Second,

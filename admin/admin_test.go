@@ -20,7 +20,7 @@ var (
 func TestAdmin(t *testing.T) {
 	logger := log.Std
 	namesrvAddrs := []string{"10.200.20.54:9988", "10.200.20.25:9988"}
-	a := New(namesrvAddrs, logger, "TestAdmin")
+	a := New("TestAdmin", namesrvAddrs, logger)
 	assert.Nil(t, a.Start())
 
 	assert.Equal(t, a.State, rocketmq.StateRunning)

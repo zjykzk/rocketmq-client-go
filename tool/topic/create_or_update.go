@@ -37,7 +37,7 @@ func main() {
 	}
 
 	logger := log.Std
-	a := admin.New(strings.Split(namesrvAddrs, ","), logger, "tool-create-or-update")
+	a := admin.New("tool-create-or-update", strings.Split(namesrvAddrs, ","), logger)
 	a.Start()
 	defer a.Shutdown()
 

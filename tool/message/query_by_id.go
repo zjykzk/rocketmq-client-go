@@ -45,7 +45,7 @@ func (q *queryByID) Run(args []string) {
 	}
 
 	logger := log.Std
-	a := admin.New([]string{"X"}, logger, "tool-querybyid")
+	a := admin.New("tool-querybyid", []string{"X"}, logger)
 	a.Start()
 
 	msg, err := a.QueryMessageByID(q.offsetID)

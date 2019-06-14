@@ -56,7 +56,7 @@ func (c *consumeDirectly) Run(args []string) {
 	}
 
 	logger := log.Std
-	a := admin.New([]string{"fake.namesrv.com"}, logger, "too-consume-directly")
+	a := admin.New("too-consume-directly", []string{"fake.namesrv.com"}, logger)
 	a.Start()
 
 	r, err := a.ConsumeMessageDirectly(c.group, c.clientID, c.offsetID)
